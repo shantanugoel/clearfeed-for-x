@@ -13,8 +13,8 @@ ClearFeed for X is a browser extension that allows you to filter and modify cont
     *   Case sensitivity toggle.
     *   "Match whole word only" option.
 *   **Import/Export:** Backup and share your rules using JSON import/export.
+*   **Private Analytics** Local analytics to see which rules are triggering or which users get flagged.
 *   **(Planned)** Semantic analysis to match based on intent.
-*   **(Planned)** Local analytics to see which rules are triggering.
 *   **(Planned)** Optional data submission to a global database.
 
 ## Installation
