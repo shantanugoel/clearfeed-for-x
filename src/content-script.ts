@@ -8,19 +8,19 @@ let currentRules: Rule[] = [];
 let observer: MutationObserver | null = null;
 
 // --- Constants ---
-const TWEET_SELECTOR = 'article[role="article"]'; // Selector for the main post/tweet container
-const TWEET_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a post/tweet
+const POST_SELECTOR = 'article[role="article"]'; // Selector for the main post/tweet container
+const POST_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a post/tweet
 const PROCESSED_MARKER = 'data-agenda-revealer-processed'; // Attribute to mark processed posts/tweets
 
 // --- Core Logic ---
 
 /**
- * Finds the main post/tweet container element travelling up from a given element.
+ * Finds the main post container element travelling up from a given element.
  */
-function findParentTweetElement(element: Node | null): HTMLElement | null {
+function findParentPostElement(element: Node | null): HTMLElement | null {
     let current: Node | null = element;
     while (current && current instanceof HTMLElement) {
-        if (current.matches(TWEET_SELECTOR)) {
+        if (current.matches(POST_SELECTOR)) {
             return current;
         }
         current = current.parentElement;
@@ -29,57 +29,181 @@ function findParentTweetElement(element: Node | null): HTMLElement | null {
 }
 
 /**
+ * Builds a RegExp object from a rule, handling literal, simple-regex, and the OR operator.
+ */
+function buildRegexForRule(rule: Rule): RegExp | null {
+    if (!rule.target) return null;
+
+    const parts = rule.target.split('|').map(part => part.trim()).filter(part => part.length > 0);
+    if (parts.length === 0) return null;
+
+    const regexParts = parts.map(part => {
+        // 1. Escape general regex characters
+        let escapedPart = escapeRegExp(part);
+        // 2. If simple-regex, convert wildcards
+        if (rule.type === 'simple-regex') {
+            escapedPart = escapedPart
+                .replace(/\\[*]/g, '.*?') // Convert * to .*? (non-greedy wildcard)
+                .replace(/\\[?]/g, '.');   // Convert ? to . (single character wildcard)
+        }
+        return escapedPart;
+    });
+
+    const pattern = regexParts.join('|'); // Join alternatives with Regex OR
+    const flags = rule.caseSensitive ? 'g' : 'gi'; // Global, case-insensitive (default)
+
+    try {
+        return new RegExp(pattern, flags);
+    } catch (error) {
+        console.error(`[Agenda Revealer] Invalid RegExp pattern generated for rule ID ${rule.id}:`, pattern, error);
+        return null;
+    }
+}
+
+/**
+ * Parses markdown-like formatting (**bold**, *italic*) into HTML.
+ */
+function formatReplacementText(replacement: string): string {
+    // Basic escaping first to avoid injecting unwanted HTML
+    let html = escapeHtml(replacement);
+    // Apply formatting - order matters if nesting is ever considered
+    // Using capture groups to replace markers but keep content
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // **bold** -> <strong>bold</strong>
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');         // *italic* -> <em>italic</em>
+    return html;
+}
+
+/**
+ * Replaces matched text within an element with the provided HTML, preserving structure.
+ * This is complex due to potential nested elements within the text container.
+ */
+function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacementHtml: string) {
+    // We need to iterate through text nodes and perform replacements carefully.
+    // TreeWalker is ideal for finding all text nodes within the target element.
+    const walker = document.createTreeWalker(textElement, NodeFilter.SHOW_TEXT);
+    let node;
+    const nodesToProcess: Text[] = [];
+    // Collect all text nodes first
+    while (node = walker.nextNode()) {
+        if (node instanceof Text) {
+            nodesToProcess.push(node);
+        }
+    }
+
+    // Reset regex state for global matching across nodes if needed (though usually applied per node)
+    regex.lastIndex = 0;
+
+    // Iterate through the collected text nodes
+    for (const textNode of nodesToProcess) {
+        const textContent = textNode.nodeValue || '';
+        let match;
+        let lastIndex = 0;
+        const fragment = document.createDocumentFragment();
+
+        // Reset the regex index for each node
+        regex.lastIndex = 0;
+
+        // Find all matches within this specific text node
+        while ((match = regex.exec(textContent)) !== null) {
+            const matchIndex = match.index;
+            const matchedText = match[0];
+
+            // Append text before the match
+            if (matchIndex > lastIndex) {
+                fragment.appendChild(document.createTextNode(textContent.substring(lastIndex, matchIndex)));
+            }
+
+            // Create a temporary element to parse and insert the replacement HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = replacementHtml; // Use the pre-formatted HTML
+            // Append all children of the tempDiv (could be text nodes, strong, em)
+            while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild);
+            }
+
+            lastIndex = matchIndex + matchedText.length;
+
+            // If the regex isn't global, break after the first match in this node
+            if (!regex.global) {
+                break;
+            }
+        }
+
+        // If any replacements happened in this node...
+        if (lastIndex > 0) {
+            // Append any remaining text after the last match
+            if (lastIndex < textContent.length) {
+                fragment.appendChild(document.createTextNode(textContent.substring(lastIndex)));
+            }
+            // Replace the original text node with the fragment containing replacements
+            textNode.parentNode?.replaceChild(fragment, textNode);
+        } else {
+            // No match found in this node, reset index just in case (though should be handled by exec)
+            regex.lastIndex = 0;
+        }
+    }
+}
+
+/**
  * Applies the rules to a given post/tweet element.
  */
-function processTweet(tweetElement: HTMLElement) {
-    if (!currentSettings || !currentRules || !currentSettings.extensionEnabled || tweetElement.hasAttribute(PROCESSED_MARKER)) {
+function processPost(postElement: HTMLElement) {
+    if (!currentSettings || !currentRules || !currentSettings.extensionEnabled || postElement.hasAttribute(PROCESSED_MARKER)) {
         return; // Don't process if disabled, no config, or already processed
     }
 
-    const textElement = tweetElement.querySelector(TWEET_TEXT_SELECTOR) as HTMLElement;
+    const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement;
     if (!textElement) {
-        // Mark as processed even if text not found to avoid re-checking
-        tweetElement.setAttribute(PROCESSED_MARKER, 'true');
+        postElement.setAttribute(PROCESSED_MARKER, 'true');
         return;
     }
 
-    // Use textContent for matching, but manipulation might need finer control later
-    const originalText = textElement.textContent || '';
-    let textForMatching = originalText;
-    let modified = false;
-    let hideTweet = false;
+    let hidePost = false;
+    // Store modifications to apply at the end to avoid conflicting replacements
+    const modifications: { regex: RegExp, replacementHtml: string }[] = [];
 
-    // Iterate through enabled literal rules only for Phase 1
+    // Iterate through enabled rules (literal and simple-regex for Phase 2)
     for (const rule of currentRules) {
-        if (!rule.enabled || rule.type !== 'literal') continue;
+        if (!rule.enabled || (rule.type !== 'literal' && rule.type !== 'simple-regex')) continue;
 
-        const flags = rule.caseSensitive ? 'g' : 'gi'; // Global, case-insensitive (default)
-        const regex = new RegExp(escapeRegExp(rule.target), flags);
+        const regex = buildRegexForRule(rule);
+        if (!regex) continue; // Skip if regex is invalid
 
-        if (regex.test(textForMatching)) {
+        // Create a clone of the text element content for testing matches without modifying the live DOM yet
+        // NOTE: Cloning might not perfectly capture all event listeners or complex state.
+        // For simple text matching, checking textContent should be sufficient and safer.
+        const testText = textElement.textContent || '';
+
+        if (regex.test(testText)) {
             if (rule.action === 'hide') {
-                hideTweet = true;
-                console.log(`[Agenda Revealer] Hiding post matching rule: "${rule.target}"`, tweetElement);
+                hidePost = true;
+                console.log(`[Agenda Revealer] Hiding post matching rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
                 break; // Stop processing rules if we decide to hide
             } else if (rule.action === 'replace') {
-                console.log(`[Agenda Revealer] Replacing "${rule.target}" with "${rule.replacement}" in post:`, tweetElement);
-                // Perform replacement on the current state of the text
-                textForMatching = textForMatching.replace(regex, rule.replacement);
-                modified = true;
+                console.log(`[Agenda Revealer] Queuing replacement for rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
+                const replacementHtml = formatReplacementText(rule.replacement);
+                // We need to re-create the regex for each modification to reset its state (e.g., lastIndex)
+                const modificationRegex = buildRegexForRule(rule);
+                if (modificationRegex) {
+                    modifications.push({ regex: modificationRegex, replacementHtml });
+                }
             }
         }
     }
 
     // Apply modifications to the DOM
-    tweetElement.setAttribute(PROCESSED_MARKER, 'true');
+    postElement.setAttribute(PROCESSED_MARKER, 'true');
 
-    if (hideTweet) {
-        tweetElement.style.display = 'none'; // Simple hiding
-        // Optionally add a placeholder? "Post hidden by Agenda Revealer (Rule: ...)"
-    } else if (modified) {
-        // Basic replacement - might break links/mentions/hashtags within the text
-        // A more robust solution would involve walking the text nodes
-        textElement.textContent = textForMatching;
+    if (hidePost) {
+        postElement.style.display = 'none'; // Simple hiding
+    } else if (modifications.length > 0) {
+        // Apply replacements sequentially. Order might matter!
+        // A more robust approach might try to find all matches first and replace carefully.
+        console.log(`[Agenda Revealer] Applying ${modifications.length} replacements to post...`, postElement);
+        modifications.forEach(({ regex, replacementHtml }) => {
+            // Pass the live textElement to modify
+            replaceTextWithHtml(textElement, regex, replacementHtml);
+        });
     }
 }
 
@@ -89,7 +213,7 @@ function processTweet(tweetElement: HTMLElement) {
 function observeTimeline() {
     if (observer) observer.disconnect(); // Disconnect previous observer if any
 
-    const targetNode = document.body; // Observe the whole body, might need refinement
+    const targetNode = document.body; // Observe the whole body
     if (!targetNode) {
         console.error('[Agenda Revealer] Could not find target node for MutationObserver.');
         return;
@@ -101,21 +225,16 @@ function observeTimeline() {
         for (const mutation of mutationsList) {
             if (mutation.type === 'childList') {
                 mutation.addedNodes.forEach(node => {
-                    // Check if the added node is a post/tweet or contains posts/tweets
                     if (node instanceof HTMLElement) {
-                        if (node.matches(TWEET_SELECTOR) && !node.hasAttribute(PROCESSED_MARKER)) {
-                            // Direct post/tweet added
-                            processTweet(node);
+                        if (node.matches(POST_SELECTOR) && !node.hasAttribute(PROCESSED_MARKER)) {
+                            processPost(node);
                         } else {
-                            // Check if the added node *contains* unprocessed posts/tweets
-                            node.querySelectorAll(`${TWEET_SELECTOR}:not([${PROCESSED_MARKER}])`)
-                                .forEach(tweet => processTweet(tweet as HTMLElement));
+                            node.querySelectorAll(`${POST_SELECTOR}:not([${PROCESSED_MARKER}])`)
+                                .forEach(post => processPost(post as HTMLElement));
                         }
                     }
                 });
             }
-            // We might also need to observe attribute changes if tweet text is loaded later
-            // else if (mutation.type === 'attributes') { ... }
         }
     };
 
@@ -124,8 +243,8 @@ function observeTimeline() {
     console.log('[Agenda Revealer] MutationObserver started.');
 
     // Process existing posts/tweets on the page when observation starts
-    document.querySelectorAll(`${TWEET_SELECTOR}:not([${PROCESSED_MARKER}])`)
-        .forEach(tweet => processTweet(tweet as HTMLElement));
+    document.querySelectorAll(`${POST_SELECTOR}:not([${PROCESSED_MARKER}])`)
+        .forEach(post => processPost(post as HTMLElement));
 }
 
 /**
@@ -151,15 +270,25 @@ function fetchConfigAndStart() {
             }
         } else {
             console.error('[Agenda Revealer] Failed to fetch config:', response?.message);
-            // Maybe retry after a delay?
         }
     });
 }
 
-// --- Utility: Escape Regex Special Chars ---
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#escaping
+// --- Utility: Escape Regex Special Chars & Basic HTML ---
 function escapeRegExp(string: string): string {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+    // Escape characters with special meaning in RegExp
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeHtml(unsafe: string): string {
+    // Basic HTML entity escaping
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 // --- Initialization ---
@@ -169,10 +298,6 @@ fetchConfigAndStart();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SETTINGS_UPDATED' || message.type === 'RULES_UPDATED') {
         console.log(`[Agenda Revealer] Received ${message.type}, re-fetching config.`);
-        // Re-fetch config and restart observer if necessary
         fetchConfigAndStart();
-        // Mark all as unprocessed again? Or try to selectively update?
-        // For now, re-fetch re-starts observation which processes existing ones again.
-        // A more efficient approach might be needed for very active pages.
     }
 }); 

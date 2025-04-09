@@ -29,6 +29,9 @@
     <section id="rules-management">
         <h2>Rules</h2>
         <button id="add-rule-btn">Add New Rule</button>
+        <button id="export-rules-btn">Export Rules</button>
+        <button id="import-rules-btn">Import Rules</button>
+        <input type="file" id="import-file-input" accept=".json" style="display: none;">
         <div id="rule-list-container">
             <p>Loading rules...</p>
             <!-- Rules table/list will be rendered here -->
@@ -42,20 +45,22 @@
                 <label for="rule-type">Type:</label>
                 <select id="rule-type" name="type">
                     <option value="literal">Literal Phrase</option>
-                    <option value="semantic">Semantic Intent (Experimental - Not yet implemented)</option>
+                    <option value="simple-regex">Simple Regex</option>
+                    <option value="semantic">Semantic Intent (Experimental)</option>
                 </select>
             </div>
 
             <div class="form-group">
                 <label for="rule-target" id="rule-target-label">Phrase to Find:</label>
                 <input type="text" id="rule-target" name="target" required>
-                <small id="rule-target-help">The exact word/phrase (or semantic intent description).</small>
+                <small id="rule-target-help">Literal: Exact word/phrase. Use | for alternatives.<br>Simple Regex: Use *
+                    for any characters, ? for one character. Use | for alternatives.</small>
             </div>
 
             <div class="form-group" id="replacement-group">
                 <label for="rule-replacement">Replace With:</label>
                 <input type="text" id="rule-replacement" name="replacement">
-                <small>Leave blank if action is 'Hide'.</small>
+                <small>Leave blank if action is 'Hide'. Use **bold** or *italic* for formatting.</small>
             </div>
 
             <div class="form-group">

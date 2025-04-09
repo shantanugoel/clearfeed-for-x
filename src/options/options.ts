@@ -31,6 +31,9 @@ let saveSettingsBtn: HTMLButtonElement | null = null;
 let saveRuleBtn: HTMLButtonElement | null = null;
 let cancelRuleBtn: HTMLButtonElement | null = null;
 let statusDisplay: HTMLElement | null = null; // Optional element to show status messages
+let exportBtn: HTMLButtonElement | null = null;
+let importBtn: HTMLButtonElement | null = null;
+let importFileInput: HTMLInputElement | null = null;
 
 // --- Utility Functions ---
 function showStatus(message: string, isError = false) {
@@ -137,21 +140,24 @@ function hideRuleEditor() {
 
 function updateRuleFormVisibility() {
     if (!ruleForm) return;
-    const selectedType = ruleForm.type!.value;
-    const selectedAction = ruleForm.action!.value;
+    const selectedType = ruleForm.type!.value as Rule['type'];
+    const selectedAction = ruleForm.action!.value as Rule['action'];
 
-    // Show/hide case sensitive based on type
-    ruleForm.caseSensitiveGroup!.style.display = selectedType === 'literal' ? 'block' : 'none';
+    // Show/hide case sensitive based on type (only for literal/simple-regex)
+    ruleForm.caseSensitiveGroup!.style.display = (selectedType === 'literal' || selectedType === 'simple-regex') ? 'block' : 'none';
     // Show/hide replacement based on action
     ruleForm.replacementGroup!.style.display = selectedAction === 'replace' ? 'block' : 'none';
 
     // Update target label/help text
     if (selectedType === 'semantic') {
         ruleForm.targetLabel!.textContent = 'Intent Description:';
-        ruleForm.targetHelp!.textContent = 'Describe the semantic intent (e.g., "post promoting crypto scam").';
-    } else {
-        ruleForm.targetLabel!.textContent = 'Phrase to Find:';
-        ruleForm.targetHelp!.textContent = 'The exact word/phrase.';
+        ruleForm.targetHelp!.innerHTML = 'Describe the semantic intent (e.g., "post promoting crypto scam").'; // Use innerHTML for potential formatting
+    } else if (selectedType === 'simple-regex') {
+        ruleForm.targetLabel!.textContent = 'Simple Regex Pattern:';
+        ruleForm.targetHelp!.innerHTML = 'Use * for any characters, ? for one character. Use | for alternatives.';
+    } else { // Literal
+        ruleForm.targetLabel!.textContent = 'Phrase(s) to Find:';
+        ruleForm.targetHelp!.innerHTML = 'The exact word/phrase. Use | for alternatives.';
     }
 }
 
@@ -277,6 +283,148 @@ function handleRuleListClick(event: MouseEvent) {
     }
 }
 
+function handleExportRules() {
+    if (currentRules.length === 0) {
+        showStatus('No rules to export.', true);
+        return;
+    }
+
+    try {
+        // We typically don't export the isDefault flag
+        const rulesToExport = currentRules.map(({ isDefault, ...rest }) => rest);
+        const jsonString = JSON.stringify(rulesToExport, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'agenda-revealer-rules.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showStatus('Rules exported successfully.');
+    } catch (error) {
+        console.error('Error exporting rules:', error);
+        showStatus('Failed to export rules.', true);
+    }
+}
+
+function handleImportRules() {
+    importFileInput?.click(); // Trigger hidden file input
+}
+
+function handleFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+        return;
+    }
+
+    const file = input.files[0];
+    if (!file) {
+        showStatus('No file selected.', true);
+        input.value = ''; // Reset input
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (!text) {
+            showStatus('Failed to read file.', true);
+            return;
+        }
+
+        try {
+            const importedData = JSON.parse(text);
+
+            // --- Validation --- 
+            if (!Array.isArray(importedData)) {
+                throw new Error('Imported data is not an array.');
+            }
+
+            const validatedRules: Rule[] = [];
+            const existingRuleIds = new Set(currentRules.map(r => r.id));
+
+            for (const item of importedData) {
+                // Basic structure check
+                if (!item || typeof item !== 'object' ||
+                    !item.type || typeof item.type !== 'string' ||
+                    !item.target || typeof item.target !== 'string' ||
+                    !item.action || typeof item.action !== 'string' ||
+                    typeof item.enabled !== 'boolean') {
+                    console.warn('Skipping invalid rule during import:', item);
+                    continue; // Skip invalid items
+                }
+
+                // Check allowed types/actions
+                if (!['literal', 'simple-regex', 'semantic'].includes(item.type)) continue;
+                if (!['replace', 'hide'].includes(item.action)) continue;
+
+                // Generate new ID if missing or duplicate, ensure all properties exist
+                const newRule: Rule = {
+                    id: (!item.id || typeof item.id !== 'string' || existingRuleIds.has(item.id)) ? uuidv4() : item.id,
+                    type: item.type,
+                    target: item.target.trim(),
+                    replacement: (item.replacement || '').trim(),
+                    action: item.action,
+                    enabled: item.enabled,
+                    caseSensitive: typeof item.caseSensitive === 'boolean' ? item.caseSensitive : false,
+                    isDefault: false, // Imported rules are never default
+                };
+                validatedRules.push(newRule);
+                existingRuleIds.add(newRule.id); // Add new ID to set for future checks
+            }
+
+            if (validatedRules.length === 0 && importedData.length > 0) {
+                showStatus('Import failed: No valid rules found in the file.', true);
+                return;
+            }
+            if (validatedRules.length < importedData.length) {
+                showStatus(`Imported ${validatedRules.length} rules. Some invalid entries were skipped.`, false);
+            } else {
+                showStatus(`Successfully parsed ${validatedRules.length} rules from file.`, false);
+            }
+
+            // --- Merging Strategy: Add new, ignore duplicates by ID (handled above) --- 
+            // We could add options later (e.g., replace all, merge keeping existing)
+            // For now, just append validated new rules (duplicate IDs were skipped/regenerated)
+            const mergedRules = [...currentRules, ...validatedRules.filter(vr => !currentRules.some(cr => cr.id === vr.id))];
+            // If we wanted to replace existing rules based on imported IDs:
+            // const importedIds = new Set(validatedRules.map(r => r.id));
+            // const mergedRules = [
+            //     ...currentRules.filter(r => !importedIds.has(r.id)),
+            //     ...validatedRules
+            // ];
+
+            // --- Save --- 
+            chrome.runtime.sendMessage({ type: 'SAVE_RULES', payload: { rules: mergedRules } }, (response) => {
+                if (response?.status === 'success') {
+                    currentRules = mergedRules; // Update local state
+                    renderRules();
+                    showStatus('Rules imported and saved successfully.');
+                } else {
+                    showStatus(`Error saving imported rules: ${response?.message || 'Unknown error'}`, true);
+                }
+            });
+
+        } catch (error) {
+            console.error('Error importing rules:', error);
+            showStatus(`Failed to import rules: ${error instanceof Error ? error.message : 'Invalid JSON format'}`, true);
+        }
+
+        // Reset file input value so the same file can be selected again if needed
+        input.value = '';
+    };
+
+    reader.onerror = () => {
+        showStatus('Error reading file.', true);
+        input.value = '';
+    };
+
+    reader.readAsText(file);
+}
+
 // --- Initialization --- 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded and parsed');
@@ -290,6 +438,9 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettingsBtn = document.getElementById('save-settings-btn') as HTMLButtonElement;
     saveRuleBtn = document.getElementById('save-rule-btn') as HTMLButtonElement;
     cancelRuleBtn = document.getElementById('cancel-rule-btn') as HTMLButtonElement;
+    exportBtn = document.getElementById('export-rules-btn') as HTMLButtonElement;
+    importBtn = document.getElementById('import-rules-btn') as HTMLButtonElement;
+    importFileInput = document.getElementById('import-file-input') as HTMLInputElement;
     // statusDisplay = document.getElementById('status-display'); // Uncomment if you add a status element
 
     // Cache form elements
@@ -329,6 +480,9 @@ document.addEventListener('DOMContentLoaded', () => {
     saveRuleBtn?.addEventListener('click', handleSaveRule);
     cancelRuleBtn?.addEventListener('click', hideRuleEditor);
     rulesContainer?.addEventListener('click', handleRuleListClick); // Event delegation for rule buttons/toggles
+    exportBtn?.addEventListener('click', handleExportRules);
+    importBtn?.addEventListener('click', handleImportRules);
+    importFileInput?.addEventListener('change', handleFileSelected);
 
     // Listeners for rule editor form changes to update visibility
     ruleForm?.type?.addEventListener('change', updateRuleFormVisibility);
