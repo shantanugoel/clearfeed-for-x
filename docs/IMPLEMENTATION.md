@@ -69,7 +69,13 @@ export type LocalAnalytics = {
         *   Extract text content, perhaps also considering the existing HTML structure within the text element.
         *   Send text to Background SW if semantic analysis is required for any active rule.
         *   Iterate through active literal and simple-regex rules.
-        *   For 'simple-regex', convert the target string to a valid RegExp (escape chars, handle `*` and `?`).
+        *   For each rule, construct the final RegExp:
+            *   Split `rule.target` by `|`.
+            *   Process each part:
+                *   Escape general regex special characters.
+                *   If rule type is `simple-regex`, convert `*` to `.*?` (non-greedy match) and `?` to `.`.
+            *   Join processed parts with `|`.
+            *   Create new RegExp with appropriate flags (`g`, `i` based on `caseSensitive`).
         *   Use efficient string matching (or potentially Regex for more complex literal matches) considering case sensitivity setting.
         *   If a match is found (either literal or via semantic result from Background SW):
             *   If `action` is `hide`, add a class or style to the parent tweet container (e.g., `display: none !important;`).
@@ -123,8 +129,8 @@ export type LocalAnalytics = {
         *   DOM Ready: Sends `GET_ALL_DATA` and `GET_LOCAL_ANALYTICS` to background script.
         *   Message Listener: Handles `ALL_DATA`, `LOCAL_ANALYTICS_DATA`, `RULES_SAVED`, `SETTINGS_SAVED`, `SUBMISSION_STATUS` messages from background script and updates the corresponding UI sections.
         *   Rendering Functions: Functions to populate the rule list, settings toggles, and analytics display based on received data.
-        *   Event Listeners: Attached to buttons (Add, Edit, Delete, Save Rule, Save Settings, Clear Analytics) and inputs/toggles.
-        *   Event Handlers: Functions that read data from the form/UI, construct messages (`SAVE_RULES`, `SAVE_SETTINGS`, `CLEAR_LOCAL_ANALYTICS`), and send them to the background script.
+        *   Event Listeners: Attached to buttons (Add, Edit, Delete, Save Rule, Save Settings, Clear Analytics, **Import Rules, Export Rules**) and inputs/toggles.
+        *   Event Handlers: Functions that read data from the form/UI, construct messages (`SAVE_RULES`, `SAVE_SETTINGS`, `CLEAR_LOCAL_ANALYTICS`), handle file input for import, trigger JSON generation/download for export, and send them to the background script.
 *   **UI Library:** None (or potentially a minimal CSS framework like Pico.css for basic styling).
 *   **State Management:** No dedicated library. State is managed directly in the background script and reflected in the Options page DOM via message passing and rendering functions.
 *   **Communication:** Direct use of `chrome.runtime.sendMessage` and `chrome.runtime.onMessage.addListener`.
@@ -139,4 +145,25 @@ export type LocalAnalytics = {
 *   Ensure output format is suitable for Chrome extensions (e.g., IIFE or ES modules depending on Manifest V3 requirements).
 *   Handle static asset copying (manifest.json, icons, ML model files).
 *   Use `vite-plugin-vue` for Vue compilation.
-*   Use appropriate plugins for Tailwind/PostCSS. 
+*   Use appropriate plugins for Tailwind/PostCSS.
+
+## 6. Rule Import/Export
+
+*   **Export:**
+    *   Attach event listener to 'Export' button.
+    *   Handler retrieves `currentRules` from memory.
+    *   Creates a JSON string (`JSON.stringify(currentRules, null, 2)` for pretty printing).
+    *   Creates a `Blob` with `type: 'application/json'`. 
+    *   Creates an object URL using `URL.createObjectURL(blob)`.
+    *   Creates a temporary anchor (`<a>`) element, sets its `href` to the object URL, sets the `download` attribute (e.g., `agenda-revealer-rules.json`), clicks it, then revokes the object URL.
+*   **Import:**
+    *   Use an `<input type="file" accept=".json">` element, possibly hidden and triggered by a custom 'Import' button.
+    *   Attach event listener to the file input's `change` event.
+    *   Handler gets the selected `File` object.
+    *   Uses `FileReader` to read the file content as text.
+    *   In the `onload` callback, parse the text using `JSON.parse()`.
+    *   **Validation:** Crucially, validate the parsed data. Check if it's an array, and if each element looks like a valid `Rule` object (has required properties like `id`, `type`, `target`, `action`, `enabled`, etc., and correct data types). Could create a helper function `isValidRule(obj: any): obj is Rule`.
+    *   **Merging:** Decide on merge strategy (e.g., add imported rules, skipping duplicates based on ID or target/type combo? Replace all existing rules?). Add imported (and validated) rules to the `currentRules` array.
+    *   Send the updated `currentRules` array to the background script via `SAVE_RULES`.
+    *   Re-render the rules list.
+    *   Provide user feedback (success/error message). 

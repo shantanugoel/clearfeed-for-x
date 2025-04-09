@@ -48,19 +48,29 @@ This document outlines the phased implementation plan for the extension.
 
 ## Phase 2: Enhanced Matching & Replacement (Version 0.3.0)
 
-*   **Goal:** Add support for simple regular expressions in targets and basic formatting (bold/italic) in replacements.
+*   **Goal:** Add support for simple regular expressions in targets, basic formatting (bold/italic) in replacements, OR operator for targets, and rule import/export.
 *   **Tasks:**
     *   **Types (`src/types.ts`):**
         *   Add `'simple-regex'` to the allowed values for `Rule['type']`.
-    *   **Options Page:**
+    *   **Options Page (`options.html`, `options.ts`, `options.css`):**
         *   Add 'Simple Regex' option to the rule type dropdown.
-        *   Update help text to explain simple regex syntax (`*` = any chars, `?` = one char) and replacement formatting (e.g., using `**bold**`, `*italic*`).
-    *   **Content Script:**
-        *   Implement logic to convert 'simple-regex' target strings into actual RegExp objects (e.g., escape special chars, convert `*` to `.*`, `?` to `.`).
-        *   Modify the text replacement logic: Instead of setting `textContent`, parse the replacement string for markdown-like bold/italic markers and generate corresponding HTML (`<strong>`, `<em>`) within the target text node. This requires careful DOM manipulation to avoid breaking existing structure/listeners.
-    *   **Background Script:**
-        *   Ensure saving/loading handles the new rule type correctly (no major changes likely needed).
-*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`) and apply bold/italic formatting to replacement text.
+        *   Update help text to explain:
+            *   Simple regex syntax (`*` = any chars, `?` = one char).
+            *   Replacement formatting (e.g., `**bold**`, `*italic*`).
+            *   OR operator (`|`) usage in Literal and Simple Regex targets.
+        *   Add 'Import Rules' button (using `<input type="file">`).
+        *   Add 'Export Rules' button.
+        *   Implement logic in `options.ts` to handle file selection, JSON parsing/validation for import.
+        *   Implement logic in `options.ts` to generate JSON and trigger download for export.
+        *   (Optional: Send imported rules to background for validation before merging).
+    *   **Content Script (`content-script.ts`):**
+        *   Update target processing logic:
+            *   For 'literal' type: Split target by `|`, escape each part for regex, join with `|` to create the final RegExp.
+            *   For 'simple-regex' type: Split target by `|`, convert each part (handling `*`, `?`), join with `|` to create the final RegExp.
+        *   Implement the more complex HTML replacement logic (handling `<strong>`, `<em>` via DOM manipulation).
+    *   **Background Script (`background.ts`):**
+        *   (Optional: Add message handler for validating imported rules if doing server-side validation).
+*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`), target multiple alternatives using `|`, apply bold/italic formatting to replacements, and import/export their rule configurations.
 
 ## Phase 3: Local Storage & Analytics (Version 0.4.0)
 
