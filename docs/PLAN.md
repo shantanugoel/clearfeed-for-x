@@ -52,8 +52,10 @@ This document outlines the phased implementation plan for the extension.
 *   **Tasks:**
     *   **Types (`src/types.ts`):**
         *   Add `'simple-regex'` to the allowed values for `Rule['type']`.
+        *   Add optional `matchWholeWord` boolean flag to `Rule` type.
     *   **Options Page (`options.html`, `options.ts`, `options.css`):**
         *   Add 'Simple Regex' option to the rule type dropdown.
+        *   Add 'Match whole word only' checkbox to the rule editor form.
         *   Update help text to explain:
             *   Simple regex syntax (`*` = any chars, `?` = one char).
             *   Replacement formatting (e.g., `**bold**`, `*italic*`).
@@ -63,14 +65,16 @@ This document outlines the phased implementation plan for the extension.
         *   Implement logic in `options.ts` to handle file selection, JSON parsing/validation for import.
         *   Implement logic in `options.ts` to generate JSON and trigger download for export.
         *   (Optional: Send imported rules to background for validation before merging).
+        *   Update rule saving/loading logic to handle `matchWholeWord` flag.
     *   **Content Script (`content-script.ts`):**
-        *   Update target processing logic:
-            *   For 'literal' type: Split target by `|`, escape each part for regex, join with `|` to create the final RegExp.
-            *   For 'simple-regex' type: Split target by `|`, convert each part (handling `*`, `?`), join with `|` to create the final RegExp.
+        *   Refine target processing logic (`buildRegexForRule`):
+            *   Correctly handle wildcard conversion (`*`, `?`) vs general regex escaping order.
+            *   Wrap the pattern for each part with word boundaries (`\b`) if `matchWholeWord` is true.
+            *   Ensure `*` conversion (e.g., to `.*`) is greedy if appropriate, or that the overall regex captures the full intended match.
         *   Implement the more complex HTML replacement logic (handling `<strong>`, `<em>` via DOM manipulation).
     *   **Background Script (`background.ts`):**
         *   (Optional: Add message handler for validating imported rules if doing server-side validation).
-*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`), target multiple alternatives using `|`, apply bold/italic formatting to replacements, and import/export their rule configurations.
+*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`), target multiple alternatives using `|`, optionally match whole words only, apply bold/italic formatting to replacements, and import/export their rule configurations.
 
 ## Phase 3: Local Storage & Analytics (Version 0.4.0)
 

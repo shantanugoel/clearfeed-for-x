@@ -38,15 +38,49 @@ function buildRegexForRule(rule: Rule): RegExp | null {
     if (parts.length === 0) return null;
 
     const regexParts = parts.map(part => {
-        // 1. Escape general regex characters
-        let escapedPart = escapeRegExp(part);
-        // 2. If simple-regex, convert wildcards
+        let processedPart = part;
+
+        // 1. Convert simple-regex wildcards *before* escaping other chars
         if (rule.type === 'simple-regex') {
-            escapedPart = escapedPart
-                .replace(/\\[*]/g, '.*?') // Convert * to .*? (non-greedy wildcard)
-                .replace(/\\[?]/g, '.');   // Convert ? to . (single character wildcard)
+            processedPart = processedPart
+                .replace(/[*]/g, '__TEMP_ASTERISK__') // Temp marker for *
+                .replace(/[?]/g, '__TEMP_QUESTION__'); // Temp marker for ?
         }
-        return escapedPart;
+
+        // 2. Escape general regex characters
+        processedPart = escapeRegExp(processedPart);
+
+        // 3. Replace temp markers with actual regex equivalents
+        if (rule.type === 'simple-regex') {
+            processedPart = processedPart
+                .replace(/__TEMP_ASTERISK__/g, '\\w*')  // Convert * to \w* (zero or more word characters, greedy)
+                .replace(/__TEMP_QUESTION__/g, '.');   // Convert ? to . (any single character)
+        }
+
+        // 4. Add word boundaries if requested
+        if (rule.matchWholeWord) {
+            const startsWithWildcard = processedPart.startsWith('\w*') || processedPart.startsWith('.');
+            const endsWithWildcard = processedPart.endsWith('\w*') || processedPart.endsWith('.');
+
+            // Add leading \b unless the pattern starts with a wildcard
+            const finalStart = startsWithWildcard ? '' : '\\b';
+            // Add trailing \b unless the pattern ends with a wildcard
+            const finalEnd = endsWithWildcard ? '' : '\\b';
+
+            // Avoid adding boundaries if the entire pattern might just be wildcards (e.g., \w* or .)
+            // This might still need refinement for complex patterns, but handles common cases.
+            const effectivelyJustWildcards = processedPart === '\w*' || processedPart === '.';
+
+            if (!effectivelyJustWildcards) {
+                processedPart = `${finalStart}${processedPart}${finalEnd}`;
+            } else {
+                // If the pattern IS just wildcards, don't add boundaries
+                // For example, a rule with target "*" and matchWholeWord=true becomes just "\w*"
+                // This prevents it becoming "\b\w*\b" which might be unintended.
+            }
+        }
+
+        return processedPart;
     });
 
     const pattern = regexParts.join('|'); // Join alternatives with Regex OR
@@ -107,6 +141,17 @@ function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacemen
         while ((match = regex.exec(textContent)) !== null) {
             const matchIndex = match.index;
             const matchedText = match[0];
+
+            // --- DEBUG LOGGING --- 
+            console.debug(`[Agenda Revealer] HTML Replace Match Found:`, {
+                regex: regex.source,
+                flags: regex.flags,
+                textNodeContent: textContent,
+                matchedText: matchedText,
+                matchIndex: matchIndex,
+                replacementHtml: replacementHtml,
+            });
+            // --- END DEBUG LOGGING ---
 
             // Append text before the match
             if (matchIndex > lastIndex) {

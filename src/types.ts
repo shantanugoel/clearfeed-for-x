@@ -8,6 +8,7 @@ export type Rule = {
     enabled: boolean;
     isDefault?: boolean; // Flag for default rules provided by the extension
     caseSensitive?: boolean; // For literal matches (default: false)
+    matchWholeWord?: boolean; // Added: Match whole word only (default: false)
 };
 
 // Defines the overall extension settings

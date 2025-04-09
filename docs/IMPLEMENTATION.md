@@ -15,6 +15,7 @@ export type Rule = {
   enabled: boolean;
   isDefault?: boolean; // Flag for default rules provided by the extension
   caseSensitive?: boolean; // For literal matches (default: false)
+  matchWholeWord?: boolean; // Added: Match whole word only (default: false)
 };
 
 // Defines the overall extension settings
@@ -69,11 +70,12 @@ export type LocalAnalytics = {
         *   Extract text content, perhaps also considering the existing HTML structure within the text element.
         *   Send text to Background SW if semantic analysis is required for any active rule.
         *   Iterate through active literal and simple-regex rules.
-        *   For each rule, construct the final RegExp:
+        *   For each rule, construct the final RegExp (`buildRegexForRule`):
             *   Split `rule.target` by `|`.
             *   Process each part:
+                *   Convert simple wildcards (`*` -> `.*?`, `?` -> `.`) **before** escaping other characters.
                 *   Escape general regex special characters.
-                *   If rule type is `simple-regex`, convert `*` to `.*?` (non-greedy match) and `?` to `.`.
+                *   If `rule.matchWholeWord` is true, wrap the processed part with `\b` (word boundary markers).
             *   Join processed parts with `|`.
             *   Create new RegExp with appropriate flags (`g`, `i` based on `caseSensitive`).
         *   Use efficient string matching (or potentially Regex for more complex literal matches) considering case sensitivity setting.
@@ -121,7 +123,8 @@ export type LocalAnalytics = {
     *   `options.html`: Defines the layout with sections for:
         *   General Settings (Toggles for extension enabled, semantic analysis, local storage, external submission type).
         *   Rule Management (Table or list to display rules, buttons for add/edit/delete).
-        *   Rule Editor Form (Hidden by default, shown for add/edit).
+        *   Rule Editor Form (Hidden by default, shown for add/edit):
+            *   Includes fields for: id (hidden), type (select), target (text), replacement (text), action (select), caseSensitive (checkbox), **matchWholeWord (checkbox)**, enabled (checkbox).
         *   Local Analytics Display (Placeholder for stats, button to clear data).
         *   External Submission Settings (Inputs for URL if configurable, status display).
     *   `options.css`: Basic styling for readability and layout.
@@ -162,7 +165,7 @@ export type LocalAnalytics = {
     *   Handler gets the selected `File` object.
     *   Uses `FileReader` to read the file content as text.
     *   In the `onload` callback, parse the text using `JSON.parse()`.
-    *   **Validation:** Crucially, validate the parsed data. Check if it's an array, and if each element looks like a valid `Rule` object (has required properties like `id`, `type`, `target`, `action`, `enabled`, etc., and correct data types). Could create a helper function `isValidRule(obj: any): obj is Rule`.
+    *   **Validation:** Crucially, validate the parsed data. Check if it's an array, and if each element looks like a valid `Rule` object (has required properties like `id`, `type`, `target`, `action`, `enabled`, `matchWholeWord`, etc., and correct data types). Could create a helper function `isValidRule(obj: any): obj is Rule`.
     *   **Merging:** Decide on merge strategy (e.g., add imported rules, skipping duplicates based on ID or target/type combo? Replace all existing rules?). Add imported (and validated) rules to the `currentRules` array.
     *   Send the updated `currentRules` array to the background script via `SAVE_RULES`.
     *   Re-render the rules list.

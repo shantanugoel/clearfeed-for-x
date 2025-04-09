@@ -24,6 +24,8 @@ let ruleForm: {
     targetHelp: HTMLElement | null;
     replacementGroup: HTMLDivElement | null;
     caseSensitiveGroup: HTMLDivElement | null;
+    matchWholeWord: HTMLInputElement | null;
+    matchWholeWordGroup: HTMLDivElement | null;
 } | null = null;
 let ruleEditorTitle: HTMLElement | null = null;
 let addRuleBtn: HTMLButtonElement | null = null;
@@ -75,6 +77,7 @@ function renderRules() {
                 <th>Replacement</th>
                 <th>Action</th>
                 <th>Case Sensitive</th>
+                <th>Whole Word</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -92,7 +95,8 @@ function renderRules() {
             <td class="rule-target-cell">${escapeHtml(rule.target)}</td>
             <td>${rule.action === 'replace' ? escapeHtml(rule.replacement) : '-'}</td>
             <td>${rule.action}</td>
-            <td>${rule.type === 'literal' ? (rule.caseSensitive ? 'Yes' : 'No') : 'N/A'}</td>
+            <td>${rule.type === 'literal' || rule.type === 'simple-regex' ? (rule.caseSensitive ? 'Yes' : 'No') : 'N/A'}</td>
+            <td>${rule.type === 'literal' || rule.type === 'simple-regex' ? (rule.matchWholeWord ? 'Yes' : 'No') : 'N/A'}</td>
             <td>
                 <button class="edit-rule-btn" data-rule-id="${rule.id}">Edit</button>
                 <button class="delete-rule-btn" data-rule-id="${rule.id}" ${rule.isDefault ? 'disabled' : ''} title="${rule.isDefault ? 'Default rules cannot be deleted' : 'Delete rule'}">Delete</button>
@@ -126,6 +130,7 @@ function showRuleEditor(rule?: Rule) {
     ruleForm.replacement!.value = rule?.replacement || '';
     ruleForm.action!.value = rule?.action || 'replace';
     ruleForm.caseSensitive!.checked = rule?.caseSensitive || false;
+    ruleForm.matchWholeWord!.checked = rule?.matchWholeWord || false;
     ruleForm.enabled!.checked = rule?.enabled ?? true; // Default to enabled for new rules
 
     ruleEditorTitle.textContent = rule ? 'Edit Rule' : 'Add Rule';
@@ -143,8 +148,12 @@ function updateRuleFormVisibility() {
     const selectedType = ruleForm.type!.value as Rule['type'];
     const selectedAction = ruleForm.action!.value as Rule['action'];
 
+    const isRegexOrLiteral = selectedType === 'literal' || selectedType === 'simple-regex';
+
     // Show/hide case sensitive based on type (only for literal/simple-regex)
-    ruleForm.caseSensitiveGroup!.style.display = (selectedType === 'literal' || selectedType === 'simple-regex') ? 'block' : 'none';
+    ruleForm.caseSensitiveGroup!.style.display = isRegexOrLiteral ? 'block' : 'none';
+    // Show/hide match whole word based on type (only for literal/simple-regex)
+    ruleForm.matchWholeWordGroup!.style.display = isRegexOrLiteral ? 'block' : 'none';
     // Show/hide replacement based on action
     ruleForm.replacementGroup!.style.display = selectedAction === 'replace' ? 'block' : 'none';
 
@@ -154,7 +163,7 @@ function updateRuleFormVisibility() {
         ruleForm.targetHelp!.innerHTML = 'Describe the semantic intent (e.g., "post promoting crypto scam").'; // Use innerHTML for potential formatting
     } else if (selectedType === 'simple-regex') {
         ruleForm.targetLabel!.textContent = 'Simple Regex Pattern:';
-        ruleForm.targetHelp!.innerHTML = 'Use * for any characters, ? for one character. Use | for alternatives.';
+        ruleForm.targetHelp!.innerHTML = 'Use * for zero or more letters/numbers/underscores (within a word), ? for one character. Use | for alternatives.';
     } else { // Literal
         ruleForm.targetLabel!.textContent = 'Phrase(s) to Find:';
         ruleForm.targetHelp!.innerHTML = 'The exact word/phrase. Use | for alternatives.';
@@ -190,11 +199,12 @@ function handleSaveRule() {
 
     const ruleData: Rule = {
         id: ruleId || uuidv4(),
-        type: ruleForm.type!.value as 'literal' | 'semantic',
+        type: ruleForm.type!.value as 'literal' | 'semantic' | 'simple-regex',
         target: ruleForm.target!.value.trim(),
         replacement: ruleForm.replacement!.value.trim(),
         action: ruleForm.action!.value as 'replace' | 'hide',
         caseSensitive: ruleForm.caseSensitive!.checked,
+        matchWholeWord: ruleForm.matchWholeWord!.checked,
         enabled: ruleForm.enabled!.checked,
         isDefault: false, // New or edited rules are not default
     };
@@ -353,13 +363,19 @@ function handleFileSelected(event: Event) {
                     !item.target || typeof item.target !== 'string' ||
                     !item.action || typeof item.action !== 'string' ||
                     typeof item.enabled !== 'boolean') {
-                    console.warn('Skipping invalid rule during import:', item);
+                    console.warn('Skipping invalid rule during import (missing core fields):', item);
                     continue; // Skip invalid items
                 }
 
                 // Check allowed types/actions
-                if (!['literal', 'simple-regex', 'semantic'].includes(item.type)) continue;
-                if (!['replace', 'hide'].includes(item.action)) continue;
+                if (!['literal', 'simple-regex', 'semantic'].includes(item.type)) {
+                    console.warn('Skipping invalid rule during import (invalid type):', item);
+                    continue;
+                }
+                if (!['replace', 'hide'].includes(item.action)) {
+                    console.warn('Skipping invalid rule during import (invalid action):', item);
+                    continue;
+                }
 
                 // Generate new ID if missing or duplicate, ensure all properties exist
                 const newRule: Rule = {
@@ -370,6 +386,7 @@ function handleFileSelected(event: Event) {
                     action: item.action,
                     enabled: item.enabled,
                     caseSensitive: typeof item.caseSensitive === 'boolean' ? item.caseSensitive : false,
+                    matchWholeWord: typeof item.matchWholeWord === 'boolean' ? item.matchWholeWord : false,
                     isDefault: false, // Imported rules are never default
                 };
                 validatedRules.push(newRule);
@@ -457,6 +474,8 @@ document.addEventListener('DOMContentLoaded', () => {
             targetHelp: ruleEditor.querySelector('#rule-target-help'),
             replacementGroup: ruleEditor.querySelector('#replacement-group'),
             caseSensitiveGroup: ruleEditor.querySelector('#case-sensitive-group'),
+            matchWholeWord: ruleEditor.querySelector('#rule-matchWholeWord'),
+            matchWholeWordGroup: ruleEditor.querySelector('#match-whole-word-group'),
         };
     }
 

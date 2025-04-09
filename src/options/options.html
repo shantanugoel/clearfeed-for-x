@@ -54,7 +54,8 @@
                 <label for="rule-target" id="rule-target-label">Phrase to Find:</label>
                 <input type="text" id="rule-target" name="target" required>
                 <small id="rule-target-help">Literal: Exact word/phrase. Use | for alternatives.<br>Simple Regex: Use *
-                    for any characters, ? for one character. Use | for alternatives.</small>
+                    for zero or more letters/numbers/underscores (within a word), ? for one character. Use | for
+                    alternatives.</small>
             </div>
 
             <div class="form-group" id="replacement-group">
@@ -74,6 +75,11 @@
             <div class="form-group" id="case-sensitive-group">
                 <label for="rule-caseSensitive">Case Sensitive:</label>
                 <input type="checkbox" id="rule-caseSensitive" name="caseSensitive">
+            </div>
+
+            <div class="form-group" id="match-whole-word-group">
+                <label for="rule-matchWholeWord">Match Whole Word Only:</label>
+                <input type="checkbox" id="rule-matchWholeWord" name="matchWholeWord">
             </div>
 
             <div class="form-group">
