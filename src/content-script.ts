@@ -246,9 +246,11 @@ function addOrUpdateClearFeedBadge(postElement: HTMLElement, state: OriginalStat
     // --- Update Badge Text (if badge exists/was created) ---
     if (badge) {
         if (state.isHiddenAction) {
-            badge.textContent = state.isCurrentlyModified ? 'Show Original Tweet' : 'Hide Tweet Again';
+            // Text for hidden tweets
+            badge.textContent = state.isCurrentlyModified ? 'Un-ClearFeed it' : 'ClearFeed it';
         } else {
-            badge.textContent = state.isCurrentlyModified ? 'Show Original Text' : 'Show Modified Text';
+            // Text for tweets with replaced text
+            badge.textContent = state.isCurrentlyModified ? 'Un-ClearFeed it' : 'ClearFeed it';
         }
     }
 }
