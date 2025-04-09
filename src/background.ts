@@ -139,27 +139,33 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
             case 'LOG_FLAGGED_POST':
                 try {
                     const settingsData = await chrome.storage.sync.get(STORAGE_KEY_SETTINGS);
-                    // Ensure correct type when retrieving settings
                     const settings: ExtensionSettings = settingsData[STORAGE_KEY_SETTINGS] || defaultSettings;
 
-                    // Type guard for payload specific to LOG_FLAGGED_POST
                     const postPayload = message.payload as FlaggedPostData | undefined;
 
-                    if (settings.enableLocalLogging && postPayload) {
+                    if (settings.enableLocalLogging && postPayload && postPayload.postUrl !== 'unknown') {
                         const logData = await chrome.storage.local.get(STORAGE_KEY_LOCAL_LOG);
                         let currentLogs: FlaggedPostData[] = logData[STORAGE_KEY_LOCAL_LOG] || [];
 
-                        // Add the new log entry
-                        currentLogs.push(postPayload);
+                        // --- Deduplication Check --- 
+                        const existingLogIndex = currentLogs.findIndex(log => log.postUrl === postPayload.postUrl);
 
-                        // Trim logs if they exceed the limit (keep newest)
-                        if (currentLogs.length > MAX_LOG_ENTRIES) {
-                            currentLogs = currentLogs.slice(currentLogs.length - MAX_LOG_ENTRIES);
+                        if (existingLogIndex === -1) { // Only add if URL not already logged
+                            // Add the new log entry
+                            currentLogs.push(postPayload);
+
+                            // Trim logs if they exceed the limit (keep newest)
+                            if (currentLogs.length > MAX_LOG_ENTRIES) {
+                                currentLogs = currentLogs.slice(currentLogs.length - MAX_LOG_ENTRIES);
+                            }
+
+                            await chrome.storage.local.set({ [STORAGE_KEY_LOCAL_LOG]: currentLogs });
+                            console.log(`[Background] Logged flagged post: ${postPayload.postUrl}`);
+                        } else {
+                            console.log(`[Background] Post already logged, skipping: ${postPayload.postUrl}`);
                         }
-
-                        await chrome.storage.local.set({ [STORAGE_KEY_LOCAL_LOG]: currentLogs });
-                        // No need to send a response, this is fire-and-forget from content script
-                        console.log('[Background] Logged flagged post.'); // Optional logging
+                    } else if (settings.enableLocalLogging && postPayload && postPayload.postUrl === 'unknown') {
+                        console.warn('[Background] Skipping log for post with unknown URL.');
                     }
                 } catch (error) {
                     console.error('[Background] Error in LOG_FLAGGED_POST handler:', error);

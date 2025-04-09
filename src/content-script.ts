@@ -23,7 +23,6 @@ type OriginalState = {
     // hiddenContentSelector?: string; // REMOVED: No longer hiding a generic wrapper
     // originalContentDisplay?: string; // REMOVED: No longer hiding a generic wrapper
     originalTextDisplay?: string; // Store original display style of the text element itself when hiding
-    logged?: boolean; // <-- Add flag to track if logging message has been sent
 };
 
 // WeakMap to store state associated with post elements
@@ -349,9 +348,6 @@ function revertModification(postElement: HTMLElement) {
     postElement.querySelector(`.${BADGE_CLASS}`)?.remove(); // Keep badge removal if needed, or let addOrUpdate handle it
 
     state.isCurrentlyModified = false;
-    state.logged = true; // Explicitly ensure it stays logged after revert?
-    // Let's keep it as is for now, log only happens if !state.logged initially.
-    // Reverting doesn't reset the logged status.
 
     // Update badge after reverting (will show 'Apply Changes' or be removed if setting is off)
     addOrUpdateClearFeedBadge(postElement, state);
@@ -373,12 +369,6 @@ function processPost(postElement: HTMLElement) {
     }
 
     const originalState = ensureOriginalStateStored(postElement, textElement);
-
-    // Reset or check logged status based on whether the post is currently modified?
-    // If the post is *not* currently modified (e.g. first time processing, or after revert), 
-    // we potentially allow logging *again* if a *different* rule matches later.
-    // For simplicity now, let's log only once per element encounter, unless explicitly reverted.
-    // We'll add the check within the logging block.
 
     let actionTaken: 'replace' | 'hide' | null = null;
     let matchedRule: Rule | null = null;
@@ -434,12 +424,10 @@ function processPost(postElement: HTMLElement) {
     postElement.setAttribute(PROCESSED_MARKER, actionTaken || 'no-match');
 
     if (actionTaken && matchedRule) {
-        // If an action was taken, update the badge
         addOrUpdateClearFeedBadge(postElement, originalState);
 
         // --- LOGGING --- 
-        // Check settings AND if this post action has already been logged
-        if (currentSettings.enableLocalLogging && !originalState.logged) {
+        if (currentSettings.enableLocalLogging) {
             try {
                 let postId = 'unknown';
                 let postUrl = 'unknown'; // Default to unknown
@@ -503,21 +491,13 @@ function processPost(postElement: HTMLElement) {
                 };
 
                 chrome.runtime.sendMessage<LogFlaggedPostMessage>({ type: 'LOG_FLAGGED_POST', payload: logEntry })
-                    .then(response => {
-                        // Set logged flag *after* successful message send
-                        originalState.logged = true;
-                        console.log('[ClearFeed] Log message sent.');
-                    })
                     .catch(error => console.warn('[ClearFeed] Could not send log message:', error.message));
 
             } catch (error) {
                 console.error('[ClearFeed] Error preparing or sending log data:', error);
             }
-        } else if (currentSettings.enableLocalLogging && originalState.logged) {
-            console.log('[ClearFeed] Action already logged for this post.'); // Optional debug log
         }
         // --- END LOGGING ---
-
     } else if (!actionTaken && originalStateMap.has(postElement)) {
         // If no rule matched THIS TIME, but the post WAS previously modified, maybe revert?
         // Or just ensure badge is removed if setting is off.
