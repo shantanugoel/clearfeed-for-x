@@ -9,13 +9,16 @@ let observer: MutationObserver | null = null;
 
 // Define structure for storing original state
 type OriginalState = {
-    originalPostHTML?: string;    // InnerHTML of the entire post element (used for reverting hide)
+    // originalPostHTML?: string;    // DEPRECATED: Avoid using where possible
     originalTextHTML?: string;    // InnerHTML of the text container (used for reverting replace)
     originalDisplay: string;      // Original display style of the post element
     modifiedTextHTML?: string;    // InnerHTML of the text container *after* replacement
     isHiddenAction: boolean;      // Was the effective action 'hide'?
     isCurrentlyModified: boolean; // Is the post currently showing the modified state?
     ruleTarget?: string;          // Target of the rule that caused the modification (for placeholder)
+    // hiddenContentSelector?: string; // REMOVED: No longer hiding a generic wrapper
+    // originalContentDisplay?: string; // REMOVED: No longer hiding a generic wrapper
+    originalTextDisplay?: string; // Store original display style of the text element itself when hiding
 };
 
 // WeakMap to store state associated with post elements
@@ -24,12 +27,13 @@ const originalStateMap = new WeakMap<HTMLElement, OriginalState>();
 // --- Constants ---
 const POST_SELECTOR = 'article[role="article"]';
 const POST_TEXT_SELECTOR = '[data-testid="tweetText"]';
+// const POST_INNER_WRAPPER_SELECTOR = ':scope > div:nth-child(2)'; // REMOVED: No longer using this strategy
 const PROCESSED_MARKER = 'data-clearfeed-processed';
 const BADGE_CLASS = 'clearfeed-badge';
 const BADGE_APPLIED_TEXT = 'Show Original';
 const BADGE_REVERTED_TEXT = 'Show Changes';
 const HIDDEN_PLACEHOLDER_CLASS = 'clearfeed-hidden-placeholder';
-const BADGE_CONTAINER_CLASS = 'clearfeed-badge-container'; // Class for the div holding badge in hidden posts
+const BADGE_CONTAINER_CLASS = 'clearfeed-badge-container';
 
 // --- Core Logic (Helpers first) ---
 
@@ -136,7 +140,7 @@ function ensureOriginalStateStored(postElement: HTMLElement, textElement: HTMLEl
         isCurrentlyModified: false,
     };
     // Store original innerHTML only if it hasn't been stored before.
-    state.originalPostHTML = postElement.innerHTML;
+    // state.originalPostHTML = postElement.innerHTML;
     if (textElement) {
         state.originalTextHTML = textElement.innerHTML;
     }
@@ -146,6 +150,7 @@ function ensureOriginalStateStored(postElement: HTMLElement, textElement: HTMLEl
 
 /**
  * Creates the placeholder content for a hidden post. Includes badge container.
+ * Now returns only the placeholder div, not the badge container within it directly.
  */
 function createHiddenPlaceholder(ruleTarget: string | undefined): HTMLElement {
     const placeholder = document.createElement('div');
@@ -154,13 +159,14 @@ function createHiddenPlaceholder(ruleTarget: string | undefined): HTMLElement {
     placeholder.style.border = '1px dashed #ccc';
     placeholder.style.fontSize = '12px';
     placeholder.style.color = '#666';
-    placeholder.style.display = 'block';
+    placeholder.style.display = 'block'; // Ensure it's visible
     placeholder.textContent = `Post hidden by ClearFeed${ruleTarget ? ` (Rule: "${ruleTarget}")` : ''}. `;
 
-    const badgeContainer = document.createElement('span');
-    badgeContainer.className = BADGE_CONTAINER_CLASS;
-    badgeContainer.style.marginLeft = '5px';
-    placeholder.appendChild(badgeContainer);
+    // Badge container will be added *by* addOrUpdateClearFeedBadge
+    const badgeSpan = document.createElement('span'); // Span to hold the badge
+    badgeSpan.className = BADGE_CONTAINER_CLASS;
+    badgeSpan.style.marginLeft = '5px'; // Keep margin for spacing
+    placeholder.appendChild(badgeSpan);
 
     return placeholder;
 }
@@ -171,6 +177,8 @@ function createHiddenPlaceholder(ruleTarget: string | undefined): HTMLElement {
 function addOrUpdateClearFeedBadge(postElement: HTMLElement, state: OriginalState) {
     if (!currentSettings?.showModificationBadge) {
         postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
+        // Also remove placeholder if it exists and badge is off?
+        // For now, leave placeholder if hiding, just remove badge.
         return;
     }
 
@@ -179,54 +187,69 @@ function addOrUpdateClearFeedBadge(postElement: HTMLElement, state: OriginalStat
 
     // --- Find Injection Point ---
     if (state.isHiddenAction && state.isCurrentlyModified) {
-        targetArea = postElement.querySelector(`.${BADGE_CONTAINER_CLASS}`);
-    } else if (!state.isHiddenAction || !state.isCurrentlyModified) {
+        // Badge for a currently hidden post: Target the container INSIDE the placeholder
+        const placeholder = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`);
+        targetArea = placeholder?.querySelector(`.${BADGE_CONTAINER_CLASS}`) ?? placeholder; // Target span or placeholder itself
+    } else {
+        // Badge for a modified-but-visible post OR an originally hidden post reverted to visible
         const actionToolbarSelector = 'div[role="group"][id^="id__"]';
         targetArea = postElement.querySelector(actionToolbarSelector);
         if (!targetArea) {
             const textElement = postElement.querySelector(POST_TEXT_SELECTOR);
             targetArea = textElement?.parentElement || postElement;
         }
-    } else {
-        return; // Should not happen if called correctly
     }
 
+    // --- Create Badge if needed ---
     if (!badge && targetArea) {
         badge = document.createElement('button');
         badge.className = BADGE_CLASS;
         badge.title = 'Click to toggle ClearFeed modification';
         // Styles...
-        badge.style.fontSize = '10px';
-        badge.style.padding = '1px 4px';
+        badge.style.fontSize = '11px';
+        badge.style.padding = '2px 5px';
         badge.style.border = '1px solid #ccc';
         badge.style.borderRadius = '3px';
         badge.style.cursor = 'pointer';
         badge.style.backgroundColor = '#f0f0f0';
+        badge.style.color = '#333';
         badge.style.marginLeft = '5px';
         badge.style.verticalAlign = 'middle';
         badge.style.lineHeight = 'normal';
+        badge.style.whiteSpace = 'nowrap';
 
         badge.onclick = handleToggleRevert;
 
         console.log('[ClearFeed for X] Injecting badge into:', targetArea);
-        if (targetArea.classList.contains(HIDDEN_PLACEHOLDER_CLASS) || targetArea.classList.contains(BADGE_CONTAINER_CLASS)) {
+
+        // Append based on target type
+        if (targetArea.classList.contains(BADGE_CONTAINER_CLASS)) {
+            targetArea.appendChild(badge);
+        } else if (targetArea.classList.contains(HIDDEN_PLACEHOLDER_CLASS)) {
+            // If targeting placeholder directly, still append (should have container ideally)
             targetArea.appendChild(badge);
         } else if (targetArea.matches(POST_SELECTOR)) {
             targetArea.appendChild(badge);
         } else {
             targetArea.parentNode?.insertBefore(badge, targetArea.nextSibling);
         }
+
     } else if (!targetArea && badge) {
         badge.remove();
         badge = null;
         console.warn('[ClearFeed] Removed badge because target area not found.');
     } else if (!targetArea && !badge) {
-        console.warn('[ClearFeed] Could not find injection point:', postElement);
+        console.warn('[ClearFeed] Could not find injection point for post:', postElement);
         return;
     }
 
-    if (badge) { // Update text if badge exists/was created
-        badge.textContent = state.isCurrentlyModified ? BADGE_APPLIED_TEXT : BADGE_REVERTED_TEXT;
+    // --- Update Badge Text (if badge exists/was created) ---
+    if (badge) {
+        if (state.isHiddenAction) {
+            badge.textContent = state.isCurrentlyModified ? 'Show Original Tweet' : 'Hide Tweet Again';
+        } else {
+            badge.textContent = state.isCurrentlyModified ? 'Show Original Text' : 'Show Modified Text';
+        }
     }
 }
 
@@ -242,47 +265,54 @@ function handleToggleRevert(event: MouseEvent) {
     if (!state) return;
 
     const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
+    // const contentWrapper = state.hiddenContentSelector ? postElement.querySelector(state.hiddenContentSelector) as HTMLElement | null : null; // REMOVED
+    const placeholderElement = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`) as HTMLElement | null;
 
     if (state.isCurrentlyModified) {
-        // --- Revert TO Original --- (Show Original)
+        // --- Revert TO Original --- (Button clicked: Show Original Tweet/Text)
         console.log('[ClearFeed for X] Reverting to original:', postElement);
         if (state.isHiddenAction) {
-            if (state.originalPostHTML !== undefined) {
-                postElement.innerHTML = state.originalPostHTML;
-                postElement.style.display = state.originalDisplay;
-            } else { console.warn('[ClearFeed] Missing originalPostHTML'); }
+            // Hide placeholder, show original text element
+            if (placeholderElement) placeholderElement.style.display = 'none';
+            if (textElement) textElement.style.display = state.originalTextDisplay || ''; // Restore original display
+            else console.warn('[ClearFeed] Text element not found on revert.');
         } else if (textElement && state.originalTextHTML !== undefined) {
+            // Revert text replacement (still uses innerHTML - potential issue)
             textElement.innerHTML = state.originalTextHTML;
-            postElement.style.display = state.originalDisplay;
-        } else if (!textElement && state.originalPostHTML !== undefined) {
-            postElement.innerHTML = state.originalPostHTML;
-            postElement.style.display = state.originalDisplay;
-        } else { postElement.style.display = state.originalDisplay; }
+        }
+        // Restore original display for the main post element (likely unchanged, but for safety)
+        postElement.style.display = state.originalDisplay;
 
         state.isCurrentlyModified = false;
-        // Update badge AFTER potential DOM changes if reverting from hidden
-        addOrUpdateClearFeedBadge(postElement, state);
+        addOrUpdateClearFeedBadge(postElement, state); // Update badge text
 
     } else {
-        // --- Re-apply Modification --- (Show Changes)
+        // --- Re-apply Modification --- (Button clicked: Hide Tweet Again / Show Modified Text)
         console.log('[ClearFeed for X] Re-applying modification:', postElement);
         if (state.isHiddenAction) {
-            const placeholder = createHiddenPlaceholder(state.ruleTarget);
-            if (state.originalPostHTML === undefined) state.originalPostHTML = postElement.innerHTML; // Store original NOW if missing
-            postElement.innerHTML = '';
-            postElement.appendChild(placeholder);
-            postElement.style.display = 'block';
+            // Hide text element, show placeholder
+            if (textElement) textElement.style.display = 'none';
+            else console.warn('[ClearFeed] Text element not found on re-apply hide.');
+            if (placeholderElement) placeholderElement.style.display = 'block'; // Make sure placeholder is visible
+            else console.warn('[ClearFeed] Placeholder element not found on re-apply hide.');
         } else if (textElement && state.modifiedTextHTML !== undefined) {
+            // Re-apply text modification (still uses innerHTML)
             textElement.innerHTML = state.modifiedTextHTML;
-            postElement.style.display = state.originalDisplay || 'block';
         } else {
             console.warn('[ClearFeed] Cannot re-apply modification - state inconsistent', state);
-            revertModification(postElement);
+            // Attempt to revert fully if re-apply fails
+            if (state.isHiddenAction) {
+                if (placeholderElement) placeholderElement.style.display = 'none';
+                if (textElement) textElement.style.display = state.originalTextDisplay || '';
+            } else if (textElement && state.originalTextHTML) {
+                textElement.innerHTML = state.originalTextHTML;
+            }
+            state.isCurrentlyModified = false; // Mark as not modified
+            addOrUpdateClearFeedBadge(postElement, state);
             return;
         }
         state.isCurrentlyModified = true;
-        // Update badge AFTER DOM changes
-        addOrUpdateClearFeedBadge(postElement, state);
+        addOrUpdateClearFeedBadge(postElement, state); // Update badge text
     }
 }
 
@@ -294,14 +324,21 @@ function revertModification(postElement: HTMLElement) {
     if (!state) return;
     console.log('[ClearFeed for X] Fully reverting & cleaning up post:', postElement);
 
-    if (state.originalPostHTML !== undefined) {
-        postElement.innerHTML = state.originalPostHTML;
+    // Find potentially hidden text element and placeholder
+    const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
+    const placeholderElement = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`) as HTMLElement | null;
+
+    // Restore original display styles
+    if (state.isHiddenAction) {
+        if (textElement) textElement.style.display = state.originalTextDisplay || ''; // Restore text display
+        if (placeholderElement) placeholderElement.remove(); // Remove placeholder completely on full revert
     } else if (state.originalTextHTML !== undefined) {
-        const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
+        // Still using innerHTML for text revert
         if (textElement) textElement.innerHTML = state.originalTextHTML;
     }
     postElement.style.display = state.originalDisplay;
 
+    // Clean up
     postElement.removeAttribute(PROCESSED_MARKER);
     originalStateMap.delete(postElement);
     postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
@@ -312,19 +349,19 @@ function revertModification(postElement: HTMLElement) {
  */
 function processPost(postElement: HTMLElement) {
     const existingState = originalStateMap.get(postElement);
+    // Initial check: avoid processing if disabled, no rules, or already processed & modified
     if (!currentSettings || !currentRules || !currentSettings.extensionEnabled ||
         (postElement.hasAttribute(PROCESSED_MARKER) && existingState?.isCurrentlyModified)) {
         return;
     }
 
     const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
-    const state = ensureOriginalStateStored(postElement, textElement);
 
     let hideRuleMatched: Rule | null = null;
     const modifications: { regex: RegExp, replacementHtml: string }[] = [];
     let ruleMatchedThisRun = false;
 
-    // --- Rule Processing Loop ---
+    // --- Rule Processing Loop --- (check if any rule matches)
     for (const rule of currentRules) {
         if (!rule.enabled || (rule.type !== 'literal' && rule.type !== 'simple-regex')) continue;
         const regex = buildRegexForRule(rule);
@@ -335,48 +372,76 @@ function processPost(postElement: HTMLElement) {
             if (rule.action === 'hide') { hideRuleMatched = rule; break; }
             else if (rule.action === 'replace' && textElement) {
                 const replacementHtml = formatReplacementText(rule.replacement);
-                const modificationRegex = buildRegexForRule(rule);
+                const modificationRegex = buildRegexForRule(rule); // Rebuild for specific replacement
                 if (modificationRegex) modifications.push({ regex: modificationRegex, replacementHtml });
             }
         }
     }
 
-    // --- Apply Action or Cleanup ---
+    // --- Apply Action or Cleanup --- (only if a rule matched this run)
     if (ruleMatchedThisRun) {
+        // Now ensure state is stored before modifying
+        const state = ensureOriginalStateStored(postElement, textElement);
+
         postElement.setAttribute(PROCESSED_MARKER, 'true');
         const applyHideAction = hideRuleMatched !== null;
         const applicableRuleTarget = hideRuleMatched?.target;
 
-        // --- Store state about THIS modification action ---
+        // Store state about THIS modification action
         state.isHiddenAction = applyHideAction;
         state.ruleTarget = applicableRuleTarget;
-        state.isCurrentlyModified = true; // Assume modification applied
+        state.isCurrentlyModified = true; // Assume modification applied successfully initially
 
         if (applyHideAction) {
-            const placeholder = createHiddenPlaceholder(applicableRuleTarget);
-            if (state.originalPostHTML === undefined) state.originalPostHTML = postElement.innerHTML;
-            postElement.innerHTML = '';
-            postElement.appendChild(placeholder);
-            postElement.style.display = 'block';
-            state.modifiedTextHTML = undefined;
+            // --- Hide using CSS display: none on the text element ONLY ---
+            if (textElement) {
+                state.originalTextDisplay = textElement.style.display || ''; // Store original display of text elem
+                textElement.style.display = 'none';
+
+                // Check if placeholder already exists (e.g., from a previous toggle)
+                let placeholder = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`) as HTMLElement | null;
+                if (!placeholder) {
+                    placeholder = createHiddenPlaceholder(applicableRuleTarget);
+                    // Insert placeholder *after* the hidden text element
+                    textElement.parentNode?.insertBefore(placeholder, textElement.nextSibling);
+                } else {
+                    placeholder.style.display = 'block'; // Ensure visible if re-hiding
+                }
+                state.modifiedTextHTML = undefined; // No text replacement happened
+                state.originalTextHTML = undefined; // Avoid potential conflict if toggling between hide/replace rules
+
+            } else {
+                console.warn('[ClearFeed] Could not find text element to hide post:', postElement);
+                state.isCurrentlyModified = false; // Failed to hide
+            }
         } else if (modifications.length > 0 && textElement) {
+            // --- Apply Text Replacement --- 
+            state.originalTextDisplay = textElement.style.display || ''; // Store original display just in case
             if (state.originalTextHTML !== undefined) {
+                // Restore original text HTML before applying potentially new replacements
+                // This ensures multiple replace rules don't stack incorrectly on the same element run
                 textElement.innerHTML = state.originalTextHTML;
             }
             modifications.forEach(({ regex, replacementHtml }) => {
                 replaceTextWithHtml(textElement, regex, replacementHtml);
             });
-            state.modifiedTextHTML = textElement.innerHTML;
+            state.modifiedTextHTML = textElement.innerHTML; // Store result
+            // Ensure main post element and text element are visible (if it was somehow hidden)
             postElement.style.display = state.originalDisplay || 'block';
+            textElement.style.display = state.originalTextDisplay || 'block';
+            // Remove placeholder if it somehow exists from a previous state (e.g. rule changed from hide to replace)
+            postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`)?.remove();
         } else {
-            state.isCurrentlyModified = false; // No actual modification occurred
+            // Rule matched but no action taken (e.g., replace rule matched but no text element)
+            state.isCurrentlyModified = false;
         }
 
         // Add/update badge (respects setting)
         addOrUpdateClearFeedBadge(postElement, state);
 
-    } else if (existingState) { // Use existingState here
-        // No rule matched now, but did before? Revert fully.
+    } else if (existingState) { // No rule matched now, but state exists?
+        // This means a previous rule matched, but no current rule does.
+        // Revert fully.
         revertModification(postElement);
     }
 }
