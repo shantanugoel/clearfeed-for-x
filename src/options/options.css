@@ -1,0 +1,28 @@
+/* Basic styles for the options page */
+body {
+    font-family: sans-serif;
+    padding: 1em;
+    min-width: 400px;
+    /* Ensure popup has some width */
+}
+
+section {
+    margin-bottom: 1.5em;
+    padding: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+h2 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3em;
+}
+
+button {
+    padding: 0.5em 1em;
+    margin-right: 0.5em;
+    cursor: pointer;
+}
+
+/* Add more specific styles as needed */

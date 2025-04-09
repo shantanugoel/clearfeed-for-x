@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda Revealer Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+
+<body>
+    <h1>Agenda Revealer Settings</h1>
+
+    <section id="general-settings">
+        <h2>General Settings</h2>
+        <!-- Toggles will be added here by JS -->
+    </section>
+
+    <section id="rules-management">
+        <h2>Rules</h2>
+        <button id="add-rule-btn">Add New Rule</button>
+        <div id="rule-list">
+            <!-- Rules will be rendered here by JS -->
+        </div>
+        <div id="rule-editor" style="display: none;">
+            <h3>Rule Editor</h3>
+            <!-- Rule form fields will be here -->
+            <button id="save-rule-btn">Save Rule</button>
+            <button id="cancel-rule-btn">Cancel</button>
+        </div>
+    </section>
+
+    <section id="local-analytics">
+        <h2>Local Analytics</h2>
+        <button id="clear-analytics-btn">Clear Local Data</button>
+        <div id="analytics-display">
+            <!-- Stats will be rendered here by JS -->
+        </div>
+    </section>
+
+    <section id="external-submission">
+        <h2>External Data Submission</h2>
+        <!-- Settings will be added here by JS -->
+    </section>
+
+    <script type="module" src="options.ts"></script>
+</body>
+
+</html>
