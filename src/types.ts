@@ -75,8 +75,9 @@ export type LocalAnalyticsData = {
         replace: number;
         hide: number;
     };
-    topRules: Array<{ ruleId: string; count: number }>; // e.g., top 10
-    topUsers: Array<{ username: string; count: number }>; // e.g., top 10 flagged users
+    // Store associated post URLs (limit stored URLs per item for performance/storage)
+    topRules: Array<{ ruleId: string; count: number; postUrls: string[] }>;
+    topUsers: Array<{ username: string; count: number; postUrls: string[] }>;
     // Potentially add more stats like counts over time later
 };
 

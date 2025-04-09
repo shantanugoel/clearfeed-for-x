@@ -23,6 +23,7 @@ type OriginalState = {
     // hiddenContentSelector?: string; // REMOVED: No longer hiding a generic wrapper
     // originalContentDisplay?: string; // REMOVED: No longer hiding a generic wrapper
     originalTextDisplay?: string; // Store original display style of the text element itself when hiding
+    logged?: boolean; // <-- Add flag to track if logging message has been sent
 };
 
 // WeakMap to store state associated with post elements
@@ -324,7 +325,9 @@ function handleToggleRevert(event: MouseEvent) {
  */
 function revertModification(postElement: HTMLElement) {
     const state = originalStateMap.get(postElement);
-    if (!state) return;
+    if (!state || !state.isCurrentlyModified) return; // Already in original state
+
+    console.log('[ClearFeed] Reverting modifications for:', postElement);
 
     // Find potentially hidden text element and placeholder
     const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
@@ -344,6 +347,12 @@ function revertModification(postElement: HTMLElement) {
     postElement.removeAttribute(PROCESSED_MARKER);
     originalStateMap.delete(postElement);
     postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
+
+    state.isCurrentlyModified = false;
+    // state.logged = false; // <-- Decide if reverting should allow re-logging
+
+    // Update badge after reverting
+    addOrUpdateClearFeedBadge(postElement, state);
 }
 
 /**
@@ -362,6 +371,12 @@ function processPost(postElement: HTMLElement) {
     }
 
     const originalState = ensureOriginalStateStored(postElement, textElement);
+
+    // Reset or check logged status based on whether the post is currently modified?
+    // If the post is *not* currently modified (e.g. first time processing, or after revert), 
+    // we potentially allow logging *again* if a *different* rule matches later.
+    // For simplicity now, let's log only once per element encounter, unless explicitly reverted.
+    // We'll add the check within the logging block.
 
     let actionTaken: 'replace' | 'hide' | null = null;
     let matchedRule: Rule | null = null;
@@ -421,7 +436,8 @@ function processPost(postElement: HTMLElement) {
         addOrUpdateClearFeedBadge(postElement, originalState);
 
         // --- LOGGING --- 
-        if (currentSettings.enableLocalLogging) {
+        // Check settings AND if this post action has already been logged
+        if (currentSettings.enableLocalLogging && !originalState.logged) {
             try {
                 let postId = 'unknown';
                 let postUrl = window.location.href; // Fallback
@@ -461,11 +477,18 @@ function processPost(postElement: HTMLElement) {
                 };
 
                 chrome.runtime.sendMessage<LogFlaggedPostMessage>({ type: 'LOG_FLAGGED_POST', payload: logEntry })
-                    .catch(error => console.warn('[ClearFeed] Could not send log message:', error.message)); // Add catch just in case
+                    .then(response => {
+                        // Set logged flag *after* successful message send
+                        originalState.logged = true;
+                        console.log('[ClearFeed] Log message sent.');
+                    })
+                    .catch(error => console.warn('[ClearFeed] Could not send log message:', error.message));
 
             } catch (error) {
                 console.error('[ClearFeed] Error preparing or sending log data:', error);
             }
+        } else if (currentSettings.enableLocalLogging && originalState.logged) {
+            console.log('[ClearFeed] Action already logged for this post.'); // Optional debug log
         }
         // --- END LOGGING ---
 

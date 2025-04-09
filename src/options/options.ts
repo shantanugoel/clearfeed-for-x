@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 let currentSettings: ExtensionSettings | null = null;
 let currentRules: Rule[] = [];
 let currentAnalytics: LocalAnalyticsData | null = null;
+let showAllRules = false; // <-- State for expanding rules list
+let showAllUsers = false; // <-- State for expanding users list
 
 // --- DOM Elements ---
 let settingsForm: HTMLDivElement | null = null;
@@ -134,31 +136,63 @@ function renderRules() {
 function renderAnalytics() {
     if (!analyticsDisplayDiv) return;
 
-    if (currentAnalytics === null) {
+    if (currentAnalytics === null || currentAnalytics.totalActions === 0) {
         analyticsDisplayDiv.innerHTML = '<p>No analytics data available. Enable local logging and interact with X/Twitter.</p>';
         return;
     }
 
-    // Find rule names for topRules (optional but helpful)
     const getRuleName = (ruleId: string): string => {
         const rule = currentRules.find(r => r.id === ruleId);
-        return rule ? `"${rule.target}" (${rule.action})` : `Unknown Rule (${ruleId.substring(0, 6)}...)`;
+        return rule ? `"${escapeHtml(rule.target)}" (${rule.action})` : `Unknown Rule (${ruleId.substring(0, 6)}...)`;
     };
+
+    const renderUrlList = (urls: string[]): string => {
+        if (!urls || urls.length === 0) return '';
+        // Display only a few URLs inline, link to see all if needed?
+        // For now, just list them as links.
+        return urls.map(url => `<a href="${url}" target="_blank" class="analytics-url-link" title="${url}">🔗</a>`).join(' ');
+    };
+
+    const rulesToShow = showAllRules ? currentAnalytics.topRules : currentAnalytics.topRules.slice(0, 10);
+    const usersToShow = showAllUsers ? currentAnalytics.topUsers : currentAnalytics.topUsers.slice(0, 10);
+
+    const rulesToggleLink = currentAnalytics.topRules.length > 10
+        ? `<a href="#" id="toggle-rules-link" class="toggle-link">${showAllRules ? 'Show Top 10' : 'Show All'}</a>`
+        : '';
+    const usersToggleLink = currentAnalytics.topUsers.length > 10
+        ? `<a href="#" id="toggle-users-link" class="toggle-link">${showAllUsers ? 'Show Top 10' : 'Show All'}</a>`
+        : '';
 
     analyticsDisplayDiv.innerHTML = `
         <div class="analytics-summary">
             <p><strong>Total Actions Logged:</strong> ${currentAnalytics.totalActions}</p>
             <p><strong>Actions by Type:</strong> Replace: ${currentAnalytics.actionsByType.replace} | Hide: ${currentAnalytics.actionsByType.hide}</p>
         </div>
-        <h4>Top 10 Rules Triggered:</h4>
-        ${currentAnalytics.topRules.length > 0
-            ? `<ul class="analytics-list">${currentAnalytics.topRules.map(item => `<li>${escapeHtml(getRuleName(item.ruleId))}: ${item.count} time(s)</li>`).join('')}</ul>`
+
+        <div class="analytics-list-header">
+             <h4>Rules Triggered</h4>
+             ${rulesToggleLink}
+        </div>
+        ${rulesToShow.length > 0
+            ? `<ul class="analytics-list">${rulesToShow.map(item =>
+                `<li>${getRuleName(item.ruleId)}: ${item.count} time(s) ${renderUrlList(item.postUrls)}</li>`
+            ).join('')}</ul>`
             : '<p>No rule data yet.</p>'}
-        <h4>Top 10 Users Flagged:</h4>
-         ${currentAnalytics.topUsers.length > 0
-            ? `<ul class="analytics-list">${currentAnalytics.topUsers.map(item => `<li>${escapeHtml(item.username)}: ${item.count} time(s)</li>`).join('')}</ul>`
+
+        <div class="analytics-list-header">
+            <h4>Users Flagged</h4>
+            ${usersToggleLink}
+        </div>
+         ${usersToShow.length > 0
+            ? `<ul class="analytics-list">${usersToShow.map(item =>
+                `<li>${escapeHtml(item.username)}: ${item.count} time(s) ${renderUrlList(item.postUrls)}</li>`
+            ).join('')}</ul>`
             : '<p>No user data yet.</p>'}
     `;
+
+    // Add event listeners for the new toggle links
+    analyticsDisplayDiv.querySelector('#toggle-rules-link')?.addEventListener('click', handleToggleRulesList);
+    analyticsDisplayDiv.querySelector('#toggle-users-link')?.addEventListener('click', handleToggleUsersList);
 }
 
 // Basic HTML escaping
@@ -499,14 +533,29 @@ function handleFileSelected(event: Event) {
     reader.readAsText(file);
 }
 
+function handleToggleRulesList(event: Event) {
+    event.preventDefault();
+    showAllRules = !showAllRules;
+    renderAnalytics(); // Re-render with updated state
+}
+
+function handleToggleUsersList(event: Event) {
+    event.preventDefault();
+    showAllUsers = !showAllUsers;
+    renderAnalytics(); // Re-render with updated state
+}
+
 function fetchAndRenderAnalytics() {
     if (!analyticsDisplayDiv) return;
-    analyticsDisplayDiv.innerHTML = '<p>Loading analytics...</p>'; // Show loading state
+    analyticsDisplayDiv.innerHTML = '<p>Loading analytics...</p>';
+    // Reset toggle states on fetch
+    showAllRules = false;
+    showAllUsers = false;
 
     chrome.runtime.sendMessage({ type: 'GET_LOCAL_ANALYTICS' }, (response) => {
         if (response?.status === 'success') {
-            currentAnalytics = response.data as LocalAnalyticsData | null; // Store fetched data
-            renderAnalytics(); // Render the fetched data
+            currentAnalytics = response.data as LocalAnalyticsData | null;
+            renderAnalytics();
         } else {
             showStatus(`Error loading analytics: ${response?.message || 'Unknown error'}`, true, analyticsStatusSpan);
             analyticsDisplayDiv.innerHTML = '<p>Error loading analytics data.</p>';
@@ -524,6 +573,8 @@ function handleClearAnalytics() {
         if (response?.status === 'success') {
             showStatus('Local analytics data cleared.', false, analyticsStatusSpan);
             currentAnalytics = null; // Clear local state
+            showAllRules = false;
+            showAllUsers = false;
             fetchAndRenderAnalytics(); // Refresh display (will show 'No data')
         } else {
             showStatus(`Error clearing data: ${response?.message || 'Unknown error'}`, true, analyticsStatusSpan);

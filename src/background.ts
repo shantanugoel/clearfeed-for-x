@@ -49,6 +49,7 @@ const STORAGE_KEY_SETTINGS = 'clearFeedSettings';
 const STORAGE_KEY_RULES = 'clearFeedRules';
 const STORAGE_KEY_LOCAL_LOG = 'clearFeedLocalLog';
 const MAX_LOG_ENTRIES = 1000;
+const MAX_URLS_PER_ANALYTIC_ITEM = 10;
 
 // --- Initialization ---
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -184,34 +185,73 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                         topUsers: [],
                     };
 
-                    const ruleCounts: Record<string, number> = {};
-                    const userCounts: Record<string, number> = {};
+                    // Use Maps to store URLs along with counts
+                    const ruleData: Map<string, { count: number; urls: Set<string> }> = new Map();
+                    const userData: Map<string, { count: number; urls: Set<string> }> = new Map();
 
                     for (const log of logs) {
                         // Count actions by type
                         if (log.actionTaken === 'replace') analytics.actionsByType.replace++;
                         else if (log.actionTaken === 'hide') analytics.actionsByType.hide++;
 
-                        // Count by rule ID
-                        ruleCounts[log.matchedRuleId] = (ruleCounts[log.matchedRuleId] || 0) + 1;
+                        // --- Aggregate Rule Data ---
+                        let currentRuleData = ruleData.get(log.matchedRuleId);
+                        if (!currentRuleData) {
+                            currentRuleData = { count: 0, urls: new Set() };
+                            ruleData.set(log.matchedRuleId, currentRuleData);
+                        }
+                        currentRuleData.count++;
+                        // Add URL, keeping the set size limited (newest URLs)
+                        if (log.postUrl && log.postUrl !== 'unknown') {
+                            // Explicit check to ensure log.postUrl is a string here
+                            const urlToAdd = log.postUrl;
+                            if (typeof urlToAdd === 'string') {
+                                if (currentRuleData.urls.size >= MAX_URLS_PER_ANALYTIC_ITEM) {
+                                    // Remove the oldest URL (first item in iteration order for Set)
+                                    const oldestUrl = currentRuleData.urls.values().next().value;
+                                    // Ensure oldestUrl is not undefined before deleting
+                                    if (oldestUrl !== undefined) {
+                                        currentRuleData.urls.delete(oldestUrl);
+                                    }
+                                }
+                                currentRuleData.urls.add(urlToAdd); // Use the guaranteed string
+                            }
+                        }
 
-                        // Count by username
-                        if (log.username !== 'unknown') { // Avoid counting 'unknown' users
-                            userCounts[log.username] = (userCounts[log.username] || 0) + 1;
+                        // --- Aggregate User Data ---
+                        if (log.username && log.username !== 'unknown') {
+                            let currentUserData = userData.get(log.username);
+                            if (!currentUserData) {
+                                currentUserData = { count: 0, urls: new Set() };
+                                userData.set(log.username, currentUserData);
+                            }
+                            currentUserData.count++;
+                            // Add URL, limiting size
+                            if (log.postUrl && log.postUrl !== 'unknown') {
+                                const urlToAdd = log.postUrl;
+                                if (typeof urlToAdd === 'string') {
+                                    if (currentUserData.urls.size >= MAX_URLS_PER_ANALYTIC_ITEM) {
+                                        const oldestUrl = currentUserData.urls.values().next().value;
+                                        // Ensure oldestUrl is not undefined before deleting
+                                        if (oldestUrl !== undefined) {
+                                            currentUserData.urls.delete(oldestUrl);
+                                        }
+                                    }
+                                    currentUserData.urls.add(urlToAdd); // Use the guaranteed string
+                                }
+                            }
                         }
                     }
 
-                    // Get top 10 rules
-                    analytics.topRules = Object.entries(ruleCounts)
-                        .sort(([, countA], [, countB]) => countB - countA)
-                        .slice(0, 10)
-                        .map(([ruleId, count]) => ({ ruleId, count }));
+                    // Get ALL rules, sorted
+                    analytics.topRules = Array.from(ruleData.entries())
+                        .sort(([, dataA], [, dataB]) => dataB.count - dataA.count)
+                        .map(([ruleId, data]) => ({ ruleId, count: data.count, postUrls: Array.from(data.urls) }));
 
-                    // Get top 10 users
-                    analytics.topUsers = Object.entries(userCounts)
-                        .sort(([, countA], [, countB]) => countB - countA)
-                        .slice(0, 10)
-                        .map(([username, count]) => ({ username, count }));
+                    // Get ALL users, sorted
+                    analytics.topUsers = Array.from(userData.entries())
+                        .sort(([, dataA], [, dataB]) => dataB.count - dataA.count)
+                        .map(([username, data]) => ({ username, count: data.count, postUrls: Array.from(data.urls) }));
 
                     sendResponse({ status: 'success', data: analytics });
                 } catch (error) {
