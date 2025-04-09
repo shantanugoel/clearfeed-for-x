@@ -1,6 +1,6 @@
-# Project Understanding: Agenda Revealer Chrome Extension
+# Project Understanding: ClearFeed for X Chrome Extension
 
-The goal is to develop a Chrome browser extension named "Agenda Revealer" specifically designed to work on `x.com` (formerly `twitter.com`).
+The goal is to develop a Chrome browser extension named "ClearFeed for X" specifically designed to work on `x.com` (formerly `twitter.com`).
 
 ## Core Functionality:
 

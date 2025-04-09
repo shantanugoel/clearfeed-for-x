@@ -1,4 +1,4 @@
-# Implementation Plan: Agenda Revealer Chrome Extension
+# Implementation Plan: ClearFeed for X Chrome Extension
 
 This document outlines the phased implementation plan for the extension.
 

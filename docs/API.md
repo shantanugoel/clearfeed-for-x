@@ -1,4 +1,4 @@
-# API Definitions: Agenda Revealer Chrome Extension
+# API Definitions: ClearFeed for X Chrome Extension
 
 This document defines the APIs used internally within the extension and the conceptual external API for data submission.
 
@@ -70,8 +70,8 @@ This defines the potential endpoint for submitting flagged tweet data. The backe
     ```json
     {
       "submissionTime": "YYYY-MM-DDTHH:mm:ssZ", // ISO 8601 timestamp
-      "source": "agenda-revealer-chrome-ext",
-      "version": "0.1.0", // Extension version
+      "source": "clearfeed-for-x-chrome-ext",
+      "version": "0.2.0", // Extension version
       "tweetUrl": "https://x.com/username/status/1234567890",
       "username": "@username",
       "matchedRule": {

@@ -1,4 +1,4 @@
-# Implementation Details: Agenda Revealer Chrome Extension
+# Implementation Details: ClearFeed for X Chrome Extension
 
 This document provides lower-level design details for key components.
 

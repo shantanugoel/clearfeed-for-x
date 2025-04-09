@@ -46,8 +46,8 @@ const defaultRules: Rule[] = [
 ];
 
 // --- Storage Keys ---
-const STORAGE_KEY_SETTINGS = 'agendaRevealerSettings';
-const STORAGE_KEY_RULES = 'agendaRevealerRules';
+const STORAGE_KEY_SETTINGS = 'clearFeedSettings';
+const STORAGE_KEY_RULES = 'clearFeedRules';
 
 // --- Initialization ---
 chrome.runtime.onInstalled.addListener(async (details) => {

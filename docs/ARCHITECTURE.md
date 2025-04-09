@@ -1,6 +1,6 @@
-# Architecture: Agenda Revealer Chrome Extension
+# Architecture: ClearFeed for X Chrome Extension
 
-This document outlines the high-level architecture for the Agenda Revealer Chrome Extension.
+This document outlines the high-level architecture for the ClearFeed for X Chrome Extension.
 
 ## 1. Components Overview
 

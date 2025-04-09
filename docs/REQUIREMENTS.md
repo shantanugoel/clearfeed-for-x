@@ -1,4 +1,4 @@
-# Requirements: Agenda Revealer Chrome Extension
+# Requirements: ClearFeed for X Chrome Extension
 
 ## 1. Functional Requirements
 

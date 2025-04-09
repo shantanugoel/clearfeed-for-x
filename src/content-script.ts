@@ -1,6 +1,6 @@
 import { type Rule, type Settings, type StorageData } from './types';
 
-console.log('Agenda Revealer Content Script Loaded');
+console.log('ClearFeed for X Content Script Loaded');
 
 // --- State ---
 let currentSettings: Settings | null = null;
@@ -10,7 +10,7 @@ let observer: MutationObserver | null = null;
 // --- Constants ---
 const POST_SELECTOR = 'article[role="article"]'; // Selector for the main post/tweet container
 const POST_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a post/tweet
-const PROCESSED_MARKER = 'data-agenda-revealer-processed'; // Attribute to mark processed posts/tweets
+const PROCESSED_MARKER = 'data-clearfeed-processed'; // Attribute to mark processed posts/tweets
 
 // --- Core Logic ---
 
@@ -76,7 +76,7 @@ function buildRegexForRule(rule: Rule): RegExp | null {
             } else {
                 // If the pattern IS just wildcards, don't add boundaries
                 // For example, a rule with target "*" and matchWholeWord=true becomes just "\w*"
-                // This prevents it becoming "\b\w*\b" which might be unintended.
+                // This prevents it becoming "\b\w*\b" which might be unintended for ClearFeed.
             }
         }
 
@@ -89,7 +89,7 @@ function buildRegexForRule(rule: Rule): RegExp | null {
     try {
         return new RegExp(pattern, flags);
     } catch (error) {
-        console.error(`[Agenda Revealer] Invalid RegExp pattern generated for rule ID ${rule.id}:`, pattern, error);
+        console.error(`[ClearFeed for X] Invalid RegExp pattern generated for rule ID ${rule.id}:`, pattern, error);
         return null;
     }
 }
@@ -143,7 +143,7 @@ function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacemen
             const matchedText = match[0];
 
             // --- DEBUG LOGGING --- 
-            console.debug(`[Agenda Revealer] HTML Replace Match Found:`, {
+            console.debug(`[ClearFeed for X] HTML Replace Match Found:`, {
                 regex: regex.source,
                 flags: regex.flags,
                 textNodeContent: textContent,
@@ -194,7 +194,7 @@ function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacemen
  */
 function processPost(postElement: HTMLElement) {
     if (!currentSettings || !currentRules || !currentSettings.extensionEnabled || postElement.hasAttribute(PROCESSED_MARKER)) {
-        return; // Don't process if disabled, no config, or already processed
+        return; // Don't process if disabled, no config, or already processed by ClearFeed
     }
 
     const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement;
@@ -222,10 +222,10 @@ function processPost(postElement: HTMLElement) {
         if (regex.test(testText)) {
             if (rule.action === 'hide') {
                 hidePost = true;
-                console.log(`[Agenda Revealer] Hiding post matching rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
+                console.log(`[ClearFeed for X] Hiding post matching rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
                 break; // Stop processing rules if we decide to hide
             } else if (rule.action === 'replace') {
-                console.log(`[Agenda Revealer] Queuing replacement for rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
+                console.log(`[ClearFeed for X] Queuing replacement for rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
                 const replacementHtml = formatReplacementText(rule.replacement);
                 // We need to re-create the regex for each modification to reset its state (e.g., lastIndex)
                 const modificationRegex = buildRegexForRule(rule);
@@ -244,7 +244,7 @@ function processPost(postElement: HTMLElement) {
     } else if (modifications.length > 0) {
         // Apply replacements sequentially. Order might matter!
         // A more robust approach might try to find all matches first and replace carefully.
-        console.log(`[Agenda Revealer] Applying ${modifications.length} replacements to post...`, postElement);
+        console.log(`[ClearFeed for X] Applying ${modifications.length} replacements to post...`, postElement);
         modifications.forEach(({ regex, replacementHtml }) => {
             // Pass the live textElement to modify
             replaceTextWithHtml(textElement, regex, replacementHtml);
@@ -260,7 +260,7 @@ function observeTimeline() {
 
     const targetNode = document.body; // Observe the whole body
     if (!targetNode) {
-        console.error('[Agenda Revealer] Could not find target node for MutationObserver.');
+        console.error('[ClearFeed for X] Could not find target node for MutationObserver.');
         return;
     }
 
@@ -285,7 +285,7 @@ function observeTimeline() {
 
     observer = new MutationObserver(callback);
     observer.observe(targetNode, config);
-    console.log('[Agenda Revealer] MutationObserver started.');
+    console.log('[ClearFeed for X] MutationObserver started.');
 
     // Process existing posts/tweets on the page when observation starts
     document.querySelectorAll(`${POST_SELECTOR}:not([${PROCESSED_MARKER}])`)
@@ -296,25 +296,25 @@ function observeTimeline() {
  * Fetches the latest settings and rules from the background script.
  */
 function fetchConfigAndStart() {
-    console.log('[Agenda Revealer] Fetching config...');
+    console.log('[ClearFeed for X] Fetching config...');
     chrome.runtime.sendMessage({ type: 'GET_ALL_DATA' }, (response) => {
         if (chrome.runtime.lastError) {
-            console.error('[Agenda Revealer] Error fetching config:', chrome.runtime.lastError);
+            console.error('[ClearFeed for X] Error fetching config:', chrome.runtime.lastError);
             return;
         }
         if (response?.status === 'success' && response.data) {
-            console.log('[Agenda Revealer] Config received:', response.data);
+            console.log('[ClearFeed for X] Config received:', response.data);
             currentSettings = response.data.settings;
             currentRules = response.data.rules || [];
 
             if (currentSettings?.extensionEnabled) {
                 observeTimeline(); // Start observing only if extension is enabled
             } else {
-                console.log('[Agenda Revealer] Extension is disabled in settings.');
+                console.log('[ClearFeed for X] Extension is disabled in settings.');
                 if (observer) observer.disconnect(); // Stop observing if disabled
             }
         } else {
-            console.error('[Agenda Revealer] Failed to fetch config:', response?.message);
+            console.error('[ClearFeed for X] Failed to fetch config:', response?.message);
         }
     });
 }
@@ -342,7 +342,7 @@ fetchConfigAndStart();
 // --- Listen for updates from background (e.g., settings changed) ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SETTINGS_UPDATED' || message.type === 'RULES_UPDATED') {
-        console.log(`[Agenda Revealer] Received ${message.type}, re-fetching config.`);
+        console.log(`[ClearFeed for X] Received ${message.type}, re-fetching config.`);
         fetchConfigAndStart();
     }
 }); 
