@@ -18,6 +18,7 @@ export type Settings = {
     localStorageEnabled: boolean; // Added for Phase 3
     submissionEnabled: boolean;
     submissionMode: 'auto' | 'manual' | 'disabled';
+    showModificationBadge: boolean; // Added: Show badge on modified/hidden posts
     // backendUrl?: string; // Optional backend URL setting
 };
 

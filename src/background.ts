@@ -10,6 +10,7 @@ const defaultSettings: Settings = {
     localStorageEnabled: true, // Enable local data capture by default
     submissionEnabled: false, // Start disabled
     submissionMode: 'disabled',
+    showModificationBadge: true, // Ensure this is present and true
 };
 
 const defaultRules: Rule[] = [
@@ -96,10 +97,25 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                 try {
                     console.log('[Background] Handling SAVE_SETTINGS...');
                     if (message.payload?.settings) {
-                        await chrome.storage.sync.set({ [STORAGE_KEY_SETTINGS]: message.payload.settings });
-                        console.log('Settings saved:', message.payload.settings);
+                        const newSettings = message.payload.settings; // Store settings for broadcast
+                        await chrome.storage.sync.set({ [STORAGE_KEY_SETTINGS]: newSettings });
+                        console.log('Settings saved:', newSettings);
+
+                        // Notify relevant contexts (e.g., content scripts, potentially other option pages)
+                        chrome.tabs.query({ url: "*://x.com/*" }, (tabs) => {
+                            tabs.forEach(tab => {
+                                if (tab.id) {
+                                    // Send settings directly in the payload
+                                    chrome.tabs.sendMessage(tab.id, { type: 'SETTINGS_UPDATED', payload: { settings: newSettings } })
+                                        .catch(error => console.log(`Could not send SETTINGS_UPDATED to tab ${tab.id}:`, error.message)); // Add catch
+                                }
+                            });
+                        });
+                        // Also notify the options page itself in case others are open
+                        chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', payload: { settings: newSettings } })
+                            .catch(error => console.log(`Could not broadcast SETTINGS_UPDATED to runtime:`, error.message)); // Add catch
+
                         sendResponse({ status: 'success', message: 'Settings saved.' });
-                        // TODO: Potentially notify content scripts of settings changes if needed immediately
                     } else {
                         console.error('[Background] Invalid payload for SAVE_SETTINGS', message.payload);
                         throw new Error('Invalid payload for SAVE_SETTINGS');
