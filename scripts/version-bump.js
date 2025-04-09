@@ -41,7 +41,13 @@ function updateChangelog(filePath, version) {
     try {
         const content = fs.readFileSync(filePath, 'utf8');
         const lines = content.split('\n');
-        const todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        // Get local date components
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 0-indexed, pad with 0
+        const day = now.getDate().toString().padStart(2, '0'); // Pad with 0
+        const todayDate = `${year}-${month}-${day}`; // Format YYYY-MM-DD locally
 
         const newSectionHeader = `## [${version}] - ${todayDate}`;
         const unreleasedHeader = '## [Unreleased]';
