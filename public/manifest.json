@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Agenda Revealer",
-    "version": "0.1.0",
-    "description": "Identifies and replaces/hides configured phrases or semantically similar content on Twitter/X.",
+    "version": "0.2.0",
+    "description": "Identifies and replaces/hides configured phrases or semantically similar content on X (formerly Twitter).",
     "permissions": [
         "storage",
         "scripting",
@@ -10,7 +10,6 @@
         "activeTab"
     ],
     "host_permissions": [
-        "*://*.twitter.com/*",
         "*://x.com/*"
     ],
     "background": {
@@ -20,7 +19,6 @@
     "content_scripts": [
         {
             "matches": [
-                "*://*.twitter.com/*",
                 "*://x.com/*"
             ],
             "js": [

@@ -1,6 +1,6 @@
 # Project Understanding: Agenda Revealer Chrome Extension
 
-The goal is to develop a Chrome browser extension named "Agenda Revealer" specifically designed to work on `x.com` and `twitter.com`.
+The goal is to develop a Chrome browser extension named "Agenda Revealer" specifically designed to work on `x.com` (formerly `twitter.com`).
 
 ## Core Functionality:
 
@@ -21,9 +21,9 @@ The goal is to develop a Chrome browser extension named "Agenda Revealer" specif
 ## Target Platform:
 
 *   Google Chrome (initially, potential for other browsers later).
-*   Websites: `x.com`, `twitter.com`.
+*   Websites: `x.com`.
 
 ## Key User Interactions:
 
 *   **Settings Page:** Configure replacement rules (add, edit, delete), toggle semantic analysis, toggle hiding, configure data submission preferences.
-*   **Browsing:** The extension automatically scans and modifies/hides content on Twitter/X pages based on active settings. Manual submission triggers (if enabled). 
+*   **Browsing:** The extension automatically scans and modifies/hides content on X.com pages based on active settings. Manual submission triggers (if enabled). 

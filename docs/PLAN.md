@@ -9,7 +9,7 @@ This document outlines the phased implementation plan for the extension.
     *   Initialize project directory.
     *   Set up `bun` as the package manager.
     *   Configure Vite for building a Chrome extension (Manifest V3) with TypeScript.
-    *   Create `manifest.json` (basic structure, permissions for `storage`, `scripting`, `tabs`, host permissions for `*://*.twitter.com/*`, `*://*.x.com/*`).
+    *   Create `manifest.json` (basic structure, permissions for `storage`, `scripting`, `tabs`, host permissions for `*://x.com/*`).
     *   Create basic `background.ts` (service worker) with installation listener to set default settings/rules.
     *   Create basic `content-script.ts` (placeholder, logs message on load).
     *   Create basic `options.html`, `options.ts`, and `options.css` (placeholders).
@@ -37,14 +37,14 @@ This document outlines the phased implementation plan for the extension.
         *   Store default rules on installation.
         *   Provide rules to Content Script when requested.
     *   **Content Script:**
-        *   Implement robust DOM element selection for tweets/posts on Twitter/X.
-        *   Use `MutationObserver` to detect dynamically loaded tweets.
+        *   Implement robust DOM element selection for posts on X.com.
+        *   Use `MutationObserver` to detect dynamically loaded posts.
         *   Request rules from Background SW.
-        *   Iterate through detected tweets and scan their text content for target phrases based on fetched rules.
+        *   Iterate through detected posts and scan their text content for target phrases based on fetched rules.
         *   Implement DOM manipulation logic to perform text replacement or element hiding based on the matched rule's action.
         *   Handle potential errors during DOM manipulation.
         *   Optimize scanning and manipulation for performance.
-*   **Outcome:** Extension can replace specified words/phrases and hide tweets based on user-configured rules via the Options page.
+*   **Outcome:** Extension can replace specified words/phrases and hide posts based on user-configured rules via the Options page.
 
 ## Phase 2: Semantic Analysis Integration (Version 0.3.0)
 
@@ -65,16 +65,16 @@ This document outlines the phased implementation plan for the extension.
         *   Add warnings about potential performance impact.
     *   **Content Script:**
         *   Modify logic to check if semantic analysis is enabled for a rule.
-        *   If enabled, send `REQUEST_SEMANTIC_ANALYSIS` message to Background SW with tweet text.
+        *   If enabled, send `REQUEST_SEMANTIC_ANALYSIS` message to Background SW with post text.
         *   Handle `ANALYSIS_RESULT` message and apply replacement/hiding based on the matched intent.
 *   **Outcome:** Users can optionally enable semantic analysis to trigger replacements/hiding based on described intents rather than just exact phrases.
 
 ## Phase 3: Local Storage & Analytics (Version 0.4.0)
 
-*   **Goal:** Store data about flagged tweets locally and provide basic analytics on the Options page.
+*   **Goal:** Store data about flagged posts locally and provide basic analytics on the Options page.
 *   **Tasks:**
     *   **Background SW:**
-        *   Define a structure for storing flagged tweet data (e.g., timestamp, tweetUrl, username, matchedRuleId/identifier, actionTaken) in `chrome.storage.local` (preferred due to potential volume).
+        *   Define a structure for storing flagged post data (e.g., timestamp, postUrl, username, matchedRuleId/identifier, actionTaken) in `chrome.storage.local`.
         *   Implement logic to save this data whenever a replace/hide action occurs (if local storage is enabled via settings).
         *   Manage storage limits (e.g., implement rotation or capping the number of entries).
         *   Add message handler (`GET_LOCAL_ANALYTICS`) to retrieve and aggregate stored data (e.g., count per rule, count per user).
@@ -86,7 +86,13 @@ This document outlines the phased implementation plan for the extension.
             *   Receive `LOCAL_ANALYTICS_DATA` message.
             *   Render the aggregated data (e.g., top 10 rules, top 10 users flagged).
             *   Provide a button/mechanism to clear locally stored data.
-*   **Outcome:** Flagged tweet information is stored locally, and basic statistics are viewable on the Options page.
+    *   **Content Script:**
+        *   Modify manual submission button logic (if present) to correctly trigger `SUBMIT_DATA_MANUAL` message, ensuring data is sent externally.
+    *   **Backend (Conceptual - requires separate implementation):**
+        *   Implement logic to send POST requests to the backend API endpoint with the required payload (post URL, username, rule info, etc.).
+        *   If manual submission is enabled, inject a "Submit Data" button or similar UI near modified/hidden posts.
+    *   Robustness testing against X.com UI changes.
+*   **Outcome:** Flagged post information is stored locally, and basic statistics are viewable on the Options page.
 
 ## Phase 4: Data Submission (Version 0.5.0)
 
@@ -107,14 +113,14 @@ This document outlines the phased implementation plan for the extension.
         *   Display status/feedback related to *external* submissions.
     *   **Content Script:**
         *   Modify manual submission button logic (if present) to correctly trigger `SUBMIT_DATA_MANUAL` message, ensuring data is sent externally.
-*   **Outcome:** Extension can optionally submit data to a central backend service, leveraging the settings and potentially reusing local storage logic structure.
+*   **Outcome:** Extension can optionally submit data about flagged posts to a central backend service, leveraging the settings and potentially reusing local storage logic structure.
 
 ## Phase 5: Refinement & Polish (Version 0.6.0 / 1.0.0)
 
 *   **Goal:** Improve performance, stability, UX, and prepare for potential release.
 *   **Tasks:**
     *   Performance profiling and optimization (content script scanning, DOM manipulation, model inference, local storage access).
-    *   Robustness testing against Twitter/X UI changes.
+    *   Robustness testing against X.com UI changes.
     *   UI/UX improvements on the Options Page.
     *   Add more comprehensive error handling and user feedback.
     *   Code cleanup and refactoring based on `.cursorrules`.

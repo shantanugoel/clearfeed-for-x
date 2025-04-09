@@ -8,14 +8,14 @@ let currentRules: Rule[] = [];
 let observer: MutationObserver | null = null;
 
 // --- Constants ---
-const TWEET_SELECTOR = 'article[role="article"]'; // Selector for the main tweet container
-const TWEET_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a tweet
-const PROCESSED_MARKER = 'data-agenda-revealer-processed'; // Attribute to mark processed tweets
+const TWEET_SELECTOR = 'article[role="article"]'; // Selector for the main post/tweet container
+const TWEET_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a post/tweet
+const PROCESSED_MARKER = 'data-agenda-revealer-processed'; // Attribute to mark processed posts/tweets
 
 // --- Core Logic ---
 
 /**
- * Finds the main tweet container element travelling up from a given element.
+ * Finds the main post/tweet container element travelling up from a given element.
  */
 function findParentTweetElement(element: Node | null): HTMLElement | null {
     let current: Node | null = element;
@@ -29,7 +29,7 @@ function findParentTweetElement(element: Node | null): HTMLElement | null {
 }
 
 /**
- * Applies the rules to a given tweet element.
+ * Applies the rules to a given post/tweet element.
  */
 function processTweet(tweetElement: HTMLElement) {
     if (!currentSettings || !currentRules || !currentSettings.extensionEnabled || tweetElement.hasAttribute(PROCESSED_MARKER)) {
@@ -59,10 +59,10 @@ function processTweet(tweetElement: HTMLElement) {
         if (regex.test(textForMatching)) {
             if (rule.action === 'hide') {
                 hideTweet = true;
-                console.log(`[Agenda Revealer] Hiding tweet matching rule: "${rule.target}"`, tweetElement);
+                console.log(`[Agenda Revealer] Hiding post matching rule: "${rule.target}"`, tweetElement);
                 break; // Stop processing rules if we decide to hide
             } else if (rule.action === 'replace') {
-                console.log(`[Agenda Revealer] Replacing "${rule.target}" with "${rule.replacement}"`, tweetElement);
+                console.log(`[Agenda Revealer] Replacing "${rule.target}" with "${rule.replacement}" in post:`, tweetElement);
                 // Perform replacement on the current state of the text
                 textForMatching = textForMatching.replace(regex, rule.replacement);
                 modified = true;
@@ -75,7 +75,7 @@ function processTweet(tweetElement: HTMLElement) {
 
     if (hideTweet) {
         tweetElement.style.display = 'none'; // Simple hiding
-        // Optionally add a placeholder? "Tweet hidden by Agenda Revealer (Rule: ...)"
+        // Optionally add a placeholder? "Post hidden by Agenda Revealer (Rule: ...)"
     } else if (modified) {
         // Basic replacement - might break links/mentions/hashtags within the text
         // A more robust solution would involve walking the text nodes
@@ -84,7 +84,7 @@ function processTweet(tweetElement: HTMLElement) {
 }
 
 /**
- * Observes changes in the DOM and processes new tweets.
+ * Observes changes in the DOM and processes new posts/tweets.
  */
 function observeTimeline() {
     if (observer) observer.disconnect(); // Disconnect previous observer if any
@@ -101,13 +101,13 @@ function observeTimeline() {
         for (const mutation of mutationsList) {
             if (mutation.type === 'childList') {
                 mutation.addedNodes.forEach(node => {
-                    // Check if the added node is a tweet or contains tweets
+                    // Check if the added node is a post/tweet or contains posts/tweets
                     if (node instanceof HTMLElement) {
                         if (node.matches(TWEET_SELECTOR) && !node.hasAttribute(PROCESSED_MARKER)) {
-                            // Direct tweet added
+                            // Direct post/tweet added
                             processTweet(node);
                         } else {
-                            // Check if the added node *contains* unprocessed tweets
+                            // Check if the added node *contains* unprocessed posts/tweets
                             node.querySelectorAll(`${TWEET_SELECTOR}:not([${PROCESSED_MARKER}])`)
                                 .forEach(tweet => processTweet(tweet as HTMLElement));
                         }
@@ -123,7 +123,7 @@ function observeTimeline() {
     observer.observe(targetNode, config);
     console.log('[Agenda Revealer] MutationObserver started.');
 
-    // Process existing tweets on the page when observation starts
+    // Process existing posts/tweets on the page when observation starts
     document.querySelectorAll(`${TWEET_SELECTOR}:not([${PROCESSED_MARKER}])`)
         .forEach(tweet => processTweet(tweet as HTMLElement));
 }

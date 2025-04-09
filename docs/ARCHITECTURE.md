@@ -7,9 +7,9 @@ This document outlines the high-level architecture for the Agenda Revealer Chrom
 The extension will consist of the following key components built using Manifest V3 standards:
 
 1.  **Content Script (`content-script.ts`):**
-    *   Runs in the context of `x.com`/`twitter.com` pages.
-    *   Responsible for identifying tweet/post elements in the DOM.
-    *   Scans the text content of tweets.
+    *   Runs in the context of `x.com` pages.
+    *   Responsible for identifying post/tweet elements in the DOM.
+    *   Scans the text content of posts.
     *   Communicates with the Background Service Worker to fetch rules and request actions (replace/hide/analyze).
     *   Performs DOM manipulation to replace text or hide elements based on instructions from the background script.
     *   Injects UI elements for manual data submission if configured.
@@ -62,11 +62,11 @@ The extension will consist of the following key components built using Manifest 
 
 ```mermaid
 graph LR
-    A[User Browses Twitter/X] --> B(Content Script: Detects Tweets);
+    A[User Browses X.com] --> B(Content Script: Detects Posts);
     B --> C{Needs Rules?};
     C -- Yes --> D[Background SW: Reads Rules from Storage];
     D --> E{Send Rules};
-    C -- No --> F[Content Script: Scans Tweet Text];
+    C -- No --> F[Content Script: Scans Post Text];
     E --> F;
     F --> G{Match Found?};
     G -- Yes --> H{Semantic Analysis Enabled?};
@@ -76,9 +76,9 @@ graph LR
     J -- Yes --> K;
     J -- No --> L(No Action);
     G -- No --> L;
-    K -- Hide Rule --> M[Content Script: Hide Tweet Element];
+    K -- Hide Rule --> M[Content Script: Hide Post Element];
     K -- Replace Rule --> N[Content Script: Replace Text in DOM];
-    M --> O(Tweet Hidden);
+    M --> O(Post Hidden);
     N --> P(Text Replaced);
     L --> Q(Done);
 ```
@@ -105,7 +105,7 @@ graph LR
 ```mermaid
 graph LR
     subgraph Extension
-        A{Action Triggered (Replace/Hide)};
+        A{Action Triggered (Replace/Hide Post)};
         A --> B{Submission Enabled?};
         B -- Yes --> C{Mode?};
         C -- Auto --> D[Background SW: Prepare Data];
@@ -125,7 +125,7 @@ graph LR
 
 ## 4. Key Considerations
 
-*   **DOM Structure Changes:** Twitter/X frequently updates its UI. The Content Script needs robust and adaptable selectors to identify tweets reliably. Using `MutationObserver` might be necessary to handle dynamically loaded content.
+*   **DOM Structure Changes:** X.com frequently updates its UI. The Content Script needs robust and adaptable selectors to identify posts reliably. Using `MutationObserver` might be necessary to handle dynamically loaded content.
 *   **Performance:** DOM manipulation and text scanning can be resource-intensive. Optimize algorithms and consider debouncing or throttling operations, especially on infinite scroll feeds.
 *   **Model Size & Performance:** The local semantic model must be small enough to be packaged with the extension and fast enough not to significantly degrade the user experience. Model quantization and efficient runtimes are crucial.
 *   **Security & Privacy:** Clearly define the data submitted to the backend. Ensure secure transmission (HTTPS) and consider data minimization and anonymization.
