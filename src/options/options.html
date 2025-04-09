@@ -13,20 +13,73 @@
 
     <section id="general-settings">
         <h2>General Settings</h2>
-        <!-- Toggles will be added here by JS -->
+        <div class="setting-item">
+            <label for="extensionEnabled">Enable Extension:</label>
+            <input type="checkbox" id="extensionEnabled" name="extensionEnabled">
+        </div>
+        <div class="setting-item">
+            <label for="semanticAnalysisEnabled">Enable Semantic Analysis (Experimental):</label>
+            <input type="checkbox" id="semanticAnalysisEnabled" name="semanticAnalysisEnabled">
+            <small>May impact performance.</small>
+        </div>
+        <!-- Settings related to local storage and submission will be added in later phases -->
+        <button id="save-settings-btn">Save General Settings</button>
     </section>
 
     <section id="rules-management">
         <h2>Rules</h2>
         <button id="add-rule-btn">Add New Rule</button>
-        <div id="rule-list">
-            <!-- Rules will be rendered here by JS -->
+        <div id="rule-list-container">
+            <p>Loading rules...</p>
+            <!-- Rules table/list will be rendered here -->
         </div>
-        <div id="rule-editor" style="display: none;">
-            <h3>Rule Editor</h3>
-            <!-- Rule form fields will be here -->
-            <button id="save-rule-btn">Save Rule</button>
-            <button id="cancel-rule-btn">Cancel</button>
+
+        <div id="rule-editor" class="rule-editor-form" style="display: none;">
+            <h3 id="rule-editor-title">Add Rule</h3>
+            <input type="hidden" id="rule-id" name="id">
+
+            <div class="form-group">
+                <label for="rule-type">Type:</label>
+                <select id="rule-type" name="type">
+                    <option value="literal">Literal Phrase</option>
+                    <option value="semantic">Semantic Intent (Experimental)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="rule-target" id="rule-target-label">Phrase to Find:</label>
+                <input type="text" id="rule-target" name="target" required>
+                <small id="rule-target-help">The exact word/phrase (or semantic intent description).</small>
+            </div>
+
+            <div class="form-group" id="replacement-group">
+                <label for="rule-replacement">Replace With:</label>
+                <input type="text" id="rule-replacement" name="replacement">
+                <small>Leave blank if action is 'Hide'.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="rule-action">Action:</label>
+                <select id="rule-action" name="action">
+                    <option value="replace">Replace Text</option>
+                    <option value="hide">Hide Tweet</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="case-sensitive-group">
+                <label for="rule-caseSensitive">Case Sensitive:</label>
+                <input type="checkbox" id="rule-caseSensitive" name="caseSensitive">
+            </div>
+
+            <div class="form-group">
+                <label for="rule-enabled">Enabled:</label>
+                <input type="checkbox" id="rule-enabled" name="enabled" checked>
+            </div>
+
+            <div class="button-group">
+                <button type="button" id="save-rule-btn">Save Rule</button>
+                <button type="button" id="cancel-rule-btn">Cancel</button>
+            </div>
         </div>
     </section>
 

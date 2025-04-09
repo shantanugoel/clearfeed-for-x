@@ -2,8 +2,9 @@
 body {
     font-family: sans-serif;
     padding: 1em;
-    min-width: 400px;
-    /* Ensure popup has some width */
+    min-width: 550px;
+    /* Ensure popup/page has enough width for table */
+    font-size: 14px;
 }
 
 section {
@@ -11,18 +12,145 @@ section {
     padding: 1em;
     border: 1px solid #ccc;
     border-radius: 4px;
+    background-color: #f9f9f9;
 }
 
 h2 {
     margin-top: 0;
     border-bottom: 1px solid #eee;
     padding-bottom: 0.3em;
+    color: #333;
+}
+
+h3 {
+    margin-top: 0;
+    color: #444;
 }
 
 button {
     padding: 0.5em 1em;
-    margin-right: 0.5em;
+    margin: 0.5em 0.5em 0.5em 0;
     cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #eee;
+    border-radius: 3px;
 }
+
+button:hover {
+    background-color: #ddd;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Settings */
+.setting-item {
+    margin-bottom: 0.8em;
+    display: flex;
+    align-items: center;
+}
+
+.setting-item label {
+    margin-right: 0.5em;
+    font-weight: bold;
+    min-width: 220px;
+}
+
+.setting-item input[type="checkbox"] {
+    margin-right: 0.5em;
+}
+
+.setting-item small {
+    color: #666;
+    margin-left: 1em;
+}
+
+/* Rules Table */
+.rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+}
+
+.rules-table th,
+.rules-table td {
+    border: 1px solid #ddd;
+    padding: 0.6em;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.rules-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.rules-table td button {
+    padding: 0.3em 0.6em;
+    font-size: 0.9em;
+    margin-right: 0.3em;
+}
+
+.rules-table .rule-target-cell {
+    word-break: break-all;
+    /* Prevent long targets breaking layout */
+    max-width: 200px;
+    /* Limit width */
+}
+
+/* Rule Editor Form */
+.rule-editor-form {
+    margin-top: 1.5em;
+    padding: 1em;
+    border: 1px dashed #ccc;
+    background-color: #fff;
+}
+
+.form-group {
+    margin-bottom: 1em;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.3em;
+    font-weight: bold;
+}
+
+.form-group input[type="text"],
+.form-group select {
+    width: 95%;
+    padding: 0.5em;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.form-group input[type="checkbox"] {
+    margin-right: 0.3em;
+}
+
+.form-group small {
+    display: block;
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 0.2em;
+}
+
+.button-group {
+    margin-top: 1em;
+    border-top: 1px solid #eee;
+    padding-top: 1em;
+}
+
+/* Status Messages (Optional) */
+/* .status-success {
+    color: green;
+    font-weight: bold;
+}
+.status-error {
+    color: red;
+    font-weight: bold;
+} */
 
 /* Add more specific styles as needed */
