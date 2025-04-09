@@ -1,4 +1,4 @@
-import { type ExtensionSettings, type Rule, type StorageData, type ExtensionMessage, type FlaggedPostData, type LocalAnalyticsData } from './types';
+import { type ExtensionSettings, type Rule, type StorageData, type ExtensionMessage, type FlaggedPostData, type LocalAnalyticsData, RULE_FORMAT_VERSION } from './types';
 import { v4 as uuidv4 } from 'uuid'; // Using UUID for unique rule IDs
 
 // --- Default State ---
@@ -21,6 +21,7 @@ const defaultRules: Rule[] = [
         enabled: true,
         isDefault: true,
         caseSensitive: false,
+        version: RULE_FORMAT_VERSION
     },
     {
         id: uuidv4(),
@@ -31,6 +32,7 @@ const defaultRules: Rule[] = [
         enabled: true,
         isDefault: true,
         caseSensitive: false,
+        version: RULE_FORMAT_VERSION
     },
     {
         id: uuidv4(),
@@ -41,6 +43,7 @@ const defaultRules: Rule[] = [
         enabled: true,
         isDefault: true,
         caseSensitive: false,
+        version: RULE_FORMAT_VERSION
     },
 ];
 

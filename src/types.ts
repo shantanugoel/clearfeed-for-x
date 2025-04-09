@@ -1,3 +1,6 @@
+// Version for the Rule object structure itself
+export const RULE_FORMAT_VERSION = '1.0';
+
 // Defines a single replacement/hiding rule
 export type Rule = {
     id: string; // Unique identifier (e.g., UUID)
@@ -9,6 +12,7 @@ export type Rule = {
     isDefault?: boolean; // Flag for default rules provided by the extension
     caseSensitive?: boolean; // For literal matches (default: false)
     matchWholeWord?: boolean; // Added: Match whole word only (default: false)
+    version?: string; // <-- Changed: Rule format version (e.g., RULE_FORMAT_VERSION)
 };
 
 // Defines the overall extension settings

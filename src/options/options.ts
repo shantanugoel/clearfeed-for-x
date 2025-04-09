@@ -5,7 +5,8 @@ import {
     type StorageData,
     type ExtensionMessage,
     type LocalAnalyticsData,
-    type FlaggedPostData
+    type FlaggedPostData,
+    RULE_FORMAT_VERSION
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -321,7 +322,8 @@ function handleSaveRule() {
         caseSensitive: ruleForm.caseSensitive!.checked,
         matchWholeWord: ruleForm.matchWholeWord!.checked,
         enabled: ruleForm.enabled!.checked,
-        isDefault: false, // New or edited rules are not default
+        isDefault: false,
+        version: RULE_FORMAT_VERSION
     };
 
     // Basic validation
@@ -502,10 +504,11 @@ function handleFileSelected(event: Event) {
                     enabled: item.enabled,
                     caseSensitive: typeof item.caseSensitive === 'boolean' ? item.caseSensitive : false,
                     matchWholeWord: typeof item.matchWholeWord === 'boolean' ? item.matchWholeWord : false,
-                    isDefault: false, // Imported rules are never default
+                    isDefault: false,
+                    version: typeof item.version === 'string' ? item.version : RULE_FORMAT_VERSION
                 };
                 validatedRules.push(newRule);
-                existingRuleIds.add(newRule.id); // Add new ID to set for future checks
+                existingRuleIds.add(newRule.id);
             }
 
             if (validatedRules.length === 0 && importedData.length > 0) {
