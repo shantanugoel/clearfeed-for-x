@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Nothing yet.
 
+## [0.4.1] - 2025-04-10
+### Fixed
+- Issue where re-applying a modification via the badge ("ClearFeed it") failed for hidden posts (placeholder not recreated) and replaced posts (incorrect state stored).
+- Improved error handling for "Extension context invalidated" errors in content script during page navigation/unload.
+- Strict URL validation in content script and background script to ensure only standard tweet URLs (`https://x.com/username/status/postId`) are logged for analytics, preventing data from photo pages, notifications, etc.
+
 ## [0.4.0] - 2025-04-10
 ### Added
 - **Local Storage:** Implemented storage of flagged post data (`FlaggedPostData`) in `chrome.storage.local` via the background script.
