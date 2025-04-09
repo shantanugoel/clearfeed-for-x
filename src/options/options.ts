@@ -37,14 +37,18 @@ let exportBtn: HTMLButtonElement | null = null;
 let importBtn: HTMLButtonElement | null = null;
 let importFileInput: HTMLInputElement | null = null;
 
+const extensionEnabledCheckbox = document.getElementById('extensionEnabled') as HTMLInputElement | null;
+const semanticAnalysisEnabledCheckbox = document.getElementById('semanticAnalysisEnabled') as HTMLInputElement | null;
+const showModificationBadgeCheckbox = document.getElementById('showModificationBadge') as HTMLInputElement | null;
+
 // --- Utility Functions ---
 function showStatus(message: string, isError = false) {
     console.log(`Status (${isError ? 'Error' : 'Success'}): ${message}`);
     // Optional: Update a status element in the DOM
-    // if (statusDisplay) {
-    //     statusDisplay.textContent = message;
-    //     statusDisplay.className = isError ? 'status-error' : 'status-success';
-    // }
+    if (statusDisplay) {
+        statusDisplay.textContent = message;
+        statusDisplay.className = isError ? 'status-error' : 'status-success';
+    }
 }
 
 // --- Rendering Functions ---
@@ -53,6 +57,7 @@ function renderSettings() {
 
     (settingsForm.querySelector('#extensionEnabled') as HTMLInputElement).checked = currentSettings.extensionEnabled;
     (settingsForm.querySelector('#semanticAnalysisEnabled') as HTMLInputElement).checked = currentSettings.semanticAnalysisEnabled;
+    (settingsForm.querySelector('#showModificationBadge') as HTMLInputElement).checked = currentSettings.showModificationBadge;
     // Add rendering for other settings (localStorageEnabled, submissionMode etc.) in later phases
 }
 
@@ -178,6 +183,7 @@ function handleSaveSettings() {
         ...currentSettings,
         extensionEnabled: (settingsForm.querySelector('#extensionEnabled') as HTMLInputElement).checked,
         semanticAnalysisEnabled: (settingsForm.querySelector('#semanticAnalysisEnabled') as HTMLInputElement).checked,
+        showModificationBadge: (settingsForm.querySelector('#showModificationBadge') as HTMLInputElement).checked,
         // Update other settings in later phases
     };
 
