@@ -16,6 +16,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Nothing yet.
 
+## [0.4.0] - 2025-04-10
+### Added
+- **Local Storage:** Implemented storage of flagged post data (`FlaggedPostData`) in `chrome.storage.local` via the background script.
+- **Options Page Analytics:**
+    - Added setting to enable/disable local logging (defaults to enabled).
+    - Added section to display aggregated analytics (Total Actions, Actions by Type, Top Rules, Top Users).
+    - Included clickable links to source posts for Top Rules and specific posts for Top Users.
+    - Added "Top User" information for each triggered rule.
+    - Implemented "Show More" / "Show Less" toggles for Top Rules and Top Users lists (defaults to Top 10).
+    - Limited inline display of flagged posts per user to 10, with an indicator if more exist.
+    - Added a button to clear all locally stored analytics data.
+- **Background Script:**
+    - Added message handler (`LOG_FLAGGED_POST`) to receive and store flagged post data, with deduplication based on post URL.
+    - Added message handler (`GET_LOCAL_ANALYTICS`) to aggregate stored logs (counts, URLs, top users per rule, timestamps) and return analytics data.
+    - Added message handler (`CLEAR_LOCAL_DATA`) to remove data from `chrome.storage.local`.
+- **Content Script:**
+    - Sends `LOG_FLAGGED_POST` message to background script when a rule is applied (if logging enabled).
+    - Collects relevant data (`postId`, `postUrl`, `username`, `matchedRuleId`, etc.) for logging.
+
+### Changed
+- Refined post URL extraction in content script to remove extra path segments (e.g., `/analytics`).
+- Moved log deduplication logic from content script to background script (checking `postUrl` before storage).
+
+### Fixed
+- Prevented artificial inflation of analytics counts by ensuring the same post URL isn't logged multiple times.
+
 ## [0.3.0] - 2025-04-09
 ### Added
 - Setting in Options page ("General Settings") to toggle visibility of the modification indicator badge (`Show Indicator Badge on Modified Posts`). Defaults to `true` (visible).
