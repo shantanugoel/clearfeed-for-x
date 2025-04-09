@@ -2,8 +2,6 @@ import './options.css';
 import { type Rule, type Settings, type StorageData, type ExtensionMessage } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
-console.log('Options script loaded.');
-
 // --- Global State (in-memory copy) ---
 let currentSettings: Settings | null = null;
 let currentRules: Rule[] = [];
@@ -43,7 +41,6 @@ const showModificationBadgeCheckbox = document.getElementById('showModificationB
 
 // --- Utility Functions ---
 function showStatus(message: string, isError = false) {
-    console.log(`Status (${isError ? 'Error' : 'Success'}): ${message}`);
     // Optional: Update a status element in the DOM
     if (statusDisplay) {
         statusDisplay.textContent = message;
@@ -448,10 +445,8 @@ function handleFileSelected(event: Event) {
     reader.readAsText(file);
 }
 
-// --- Initialization --- 
+// --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM fully loaded and parsed');
-
     // Get element references
     settingsForm = document.getElementById('general-settings') as HTMLDivElement;
     rulesContainer = document.getElementById('rule-list-container') as HTMLDivElement;
@@ -487,7 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Request initial data
     chrome.runtime.sendMessage({ type: 'GET_ALL_DATA' }, (response) => {
-        console.log('Initial data response:', response);
         if (response?.status === 'success' && response.data) {
             currentSettings = response.data.settings;
             currentRules = response.data.rules || [];

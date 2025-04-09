@@ -1,7 +1,5 @@
 import { type Rule, type Settings, type StorageData } from './types';
 
-console.log('ClearFeed for X Content Script Loaded');
-
 // --- State ---
 let currentSettings: Settings | null = null;
 let currentRules: Rule[] = [];
@@ -108,7 +106,6 @@ function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacemen
         while ((match = regex.exec(textContent)) !== null) {
             const matchIndex = match.index;
             const matchedText = match[0];
-            console.debug(`[ClearFeed for X] HTML Replace Match:`, { regex: regex.source, flags: regex.flags, matchedText, matchIndex });
             if (matchIndex > lastIndex) fragment.appendChild(document.createTextNode(textContent.substring(lastIndex, matchIndex)));
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = replacementHtml;
@@ -272,7 +269,6 @@ function handleToggleRevert(event: MouseEvent) {
 
     if (state.isCurrentlyModified) {
         // --- Revert TO Original --- (Button clicked: Show Original Tweet/Text)
-        console.log('[ClearFeed for X] Reverting to original:', postElement);
         if (state.isHiddenAction) {
             // Hide placeholder, show original text element
             if (placeholderElement) placeholderElement.style.display = 'none';
@@ -290,7 +286,6 @@ function handleToggleRevert(event: MouseEvent) {
 
     } else {
         // --- Re-apply Modification --- (Button clicked: Hide Tweet Again / Show Modified Text)
-        console.log('[ClearFeed for X] Re-applying modification:', postElement);
         if (state.isHiddenAction) {
             // Hide text element, show placeholder
             if (textElement) textElement.style.display = 'none';
@@ -324,7 +319,6 @@ function handleToggleRevert(event: MouseEvent) {
 function revertModification(postElement: HTMLElement) {
     const state = originalStateMap.get(postElement);
     if (!state) return;
-    console.log('[ClearFeed for X] Fully reverting & cleaning up post:', postElement);
 
     // Find potentially hidden text element and placeholder
     const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
@@ -454,7 +448,6 @@ function processPost(postElement: HTMLElement) {
 function updateAllBadgesVisibility() {
     if (!currentSettings) return;
     const showBadges = currentSettings.showModificationBadge;
-    console.log(`[ClearFeed for X] Updating badge visibility: ${showBadges}`);
 
     document.querySelectorAll(`[${PROCESSED_MARKER}]`).forEach(postElementHTML => {
         const postElement = postElementHTML as HTMLElement;
@@ -474,7 +467,6 @@ function updateAllBadgesVisibility() {
 // --- Listener for Background Updates ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SETTINGS_UPDATED') {
-        console.log(`[ClearFeed for X] Received SETTINGS_UPDATED`, message.payload);
         if (message.payload?.settings) {
             const settingChanged = JSON.stringify(currentSettings) !== JSON.stringify(message.payload.settings);
             const oldEnabledState = currentSettings?.extensionEnabled;
@@ -497,7 +489,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
         }
     } else if (message.type === 'RULES_UPDATED') {
-        console.log(`[ClearFeed for X] Received RULES_UPDATED, re-fetching config & reprocessing.`);
         document.querySelectorAll(`[${PROCESSED_MARKER}]`).forEach(el => revertModification(el as HTMLElement));
         fetchConfigAndStart();
     }
@@ -524,16 +515,13 @@ function observeTimeline() {
     };
     observer = new MutationObserver(callback);
     observer.observe(targetNode, config);
-    console.log('[ClearFeed for X] MutationObserver started.');
     document.querySelectorAll(POST_SELECTOR).forEach(post => processPost(post as HTMLElement));
 }
 
 function fetchConfigAndStart() {
-    console.log('[ClearFeed for X] Fetching config...');
     chrome.runtime.sendMessage({ type: 'GET_ALL_DATA' }, (response) => {
         if (chrome.runtime.lastError) { console.error('[ClearFeed] Fetch error:', chrome.runtime.lastError); return; }
         if (response?.status === 'success' && response.data) {
-            console.log('[ClearFeed for X] Config received.');
             const settingsChanged = JSON.stringify(currentSettings) !== JSON.stringify(response.data.settings);
             const rulesChanged = JSON.stringify(currentRules) !== JSON.stringify(response.data.rules);
 
@@ -545,7 +533,6 @@ function fetchConfigAndStart() {
             if (currentSettings?.extensionEnabled) {
                 observeTimeline();
                 if (rulesChanged && observer) { // Reprocess if rules changed and observing
-                    console.log('[ClearFeed] Rules changed, re-processing visible posts.');
                     document.querySelectorAll(POST_SELECTOR).forEach(post => {
                         const htmlPost = post as HTMLElement;
                         revertModification(htmlPost); // Revert first

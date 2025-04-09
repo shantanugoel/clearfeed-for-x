@@ -1,8 +1,6 @@
 import { type Settings, type Rule, type StorageData, type ExtensionMessage } from './types';
 import { v4 as uuidv4 } from 'uuid'; // Using UUID for unique rule IDs
 
-console.log('Background service worker loaded.');
-
 // --- Default State ---
 const defaultSettings: Settings = {
     extensionEnabled: true,
@@ -52,40 +50,31 @@ const STORAGE_KEY_RULES = 'clearFeedRules';
 
 // --- Initialization ---
 chrome.runtime.onInstalled.addListener(async (details) => {
-    console.log('Extension installed or updated:', details.reason);
-
     // Check if settings exist, if not, initialize
     const settingsCheck = await chrome.storage.sync.get(STORAGE_KEY_SETTINGS);
     if (!settingsCheck[STORAGE_KEY_SETTINGS]) {
         await chrome.storage.sync.set({ [STORAGE_KEY_SETTINGS]: defaultSettings });
-        console.log('Default settings saved.');
     }
 
     // Check if rules exist, if not, initialize
     const rulesCheck = await chrome.storage.sync.get(STORAGE_KEY_RULES);
     if (!rulesCheck[STORAGE_KEY_RULES]) {
         await chrome.storage.sync.set({ [STORAGE_KEY_RULES]: defaultRules });
-        console.log('Default rules saved.');
     }
 });
 
 // --- Message Handling ---
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
-    console.log('[Background] Message received:', message.type, 'from', sender.tab ? `tab ${sender.tab.id}` : 'extension');
-
     async function handleMessage() {
         switch (message.type) {
             case 'GET_ALL_DATA':
                 try {
-                    console.log('[Background] Handling GET_ALL_DATA...');
                     const settingsData = await chrome.storage.sync.get(STORAGE_KEY_SETTINGS);
                     const rulesData = await chrome.storage.sync.get(STORAGE_KEY_RULES);
-                    console.log('[Background] Storage data retrieved:', { settingsData, rulesData });
                     const response: StorageData = {
                         settings: settingsData[STORAGE_KEY_SETTINGS] || defaultSettings,
                         rules: rulesData[STORAGE_KEY_RULES] || [],
                     };
-                    console.log('[Background] Sending response for GET_ALL_DATA:', response);
                     sendResponse({ status: 'success', data: response });
                 } catch (error) {
                     console.error('[Background] Error in GET_ALL_DATA handler:', error);
@@ -95,11 +84,9 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
             case 'SAVE_SETTINGS':
                 try {
-                    console.log('[Background] Handling SAVE_SETTINGS...');
                     if (message.payload?.settings) {
                         const newSettings = message.payload.settings; // Store settings for broadcast
                         await chrome.storage.sync.set({ [STORAGE_KEY_SETTINGS]: newSettings });
-                        console.log('Settings saved:', newSettings);
 
                         // Notify relevant contexts (e.g., content scripts, potentially other option pages)
                         chrome.tabs.query({ url: "*://x.com/*" }, (tabs) => {
@@ -128,10 +115,8 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
             case 'SAVE_RULES':
                 try {
-                    console.log('[Background] Handling SAVE_RULES...');
                     if (message.payload?.rules && Array.isArray(message.payload.rules)) {
                         await chrome.storage.sync.set({ [STORAGE_KEY_RULES]: message.payload.rules });
-                        console.log('Rules saved:', message.payload.rules.length, 'rules');
                         sendResponse({ status: 'success', message: 'Rules saved.' });
                         // TODO: Potentially notify content scripts of rule changes if needed immediately
                     } else {
@@ -145,7 +130,6 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                 break;
 
             case 'PING':
-                console.log('[Background] Handling PING...');
                 sendResponse({ type: 'PONG' });
                 break;
 
