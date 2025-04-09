@@ -192,14 +192,16 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                     };
 
                     // Use Maps to store detailed data
-                    const ruleData: Map<string, { count: number; urls: Set<string> }> = new Map();
-                    // Update userData Map to store an array of recent post details
+                    const ruleData: Map<string, {
+                        count: number;
+                        urls: Set<string>;
+                        userCounts: Map<string, number>;
+                    }> = new Map();
                     const userData: Map<string, {
                         count: number;
                         posts: Array<{ url: string; ruleId: string; timestamp: number }>
                     }> = new Map();
 
-                    // Sort logs by timestamp descending to easily get the latest posts
                     logs.sort((a, b) => b.timestamp - a.timestamp);
 
                     for (const log of logs) {
@@ -207,10 +209,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                         if (log.actionTaken === 'replace') analytics.actionsByType.replace++;
                         else if (log.actionTaken === 'hide') analytics.actionsByType.hide++;
 
-                        // --- Aggregate Rule Data (remains the same, uses Set for URLs) ---
+                        // --- Aggregate Rule Data (including per-rule user counts) ---
                         let currentRuleData = ruleData.get(log.matchedRuleId);
                         if (!currentRuleData) {
-                            currentRuleData = { count: 0, urls: new Set() };
+                            currentRuleData = { count: 0, urls: new Set(), userCounts: new Map() };
                             ruleData.set(log.matchedRuleId, currentRuleData);
                         }
                         currentRuleData.count++;
@@ -225,6 +227,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                                 }
                                 currentRuleData.urls.add(urlToAdd);
                             }
+                        }
+                        if (log.username && log.username !== 'unknown') {
+                            const userForRuleCount = currentRuleData.userCounts.get(log.username) || 0;
+                            currentRuleData.userCounts.set(log.username, userForRuleCount + 1);
                         }
 
                         // --- Aggregate User Data (Store recent posts) ---
@@ -251,10 +257,26 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                         }
                     }
 
-                    // Get ALL rules, sorted (no change needed here)
+                    // Get ALL rules, sorted, and find top user for each
                     analytics.topRules = Array.from(ruleData.entries())
                         .sort(([, dataA], [, dataB]) => dataB.count - dataA.count)
-                        .map(([ruleId, data]) => ({ ruleId, count: data.count, postUrls: Array.from(data.urls) }));
+                        .map(([ruleId, data]) => {
+                            // Find top user for this rule
+                            let topUserForRule: { username: string; count: number } | undefined = undefined;
+                            if (data.userCounts.size > 0) {
+                                const sortedUsers = Array.from(data.userCounts.entries())
+                                    .sort(([, countA], [, countB]) => countB - countA);
+                                if (sortedUsers.length > 0 && sortedUsers[0]) {
+                                    topUserForRule = { username: sortedUsers[0][0], count: sortedUsers[0][1] };
+                                }
+                            }
+                            return {
+                                ruleId,
+                                count: data.count,
+                                postUrls: Array.from(data.urls),
+                                topUser: topUserForRule
+                            };
+                        });
 
                     // Get ALL users, sorted, map to new structure
                     analytics.topUsers = Array.from(userData.entries())

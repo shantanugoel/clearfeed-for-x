@@ -75,13 +75,17 @@ export type LocalAnalyticsData = {
         replace: number;
         hide: number;
     };
-    // Store associated post URLs (limit stored URLs per item for performance/storage)
-    topRules: Array<{ ruleId: string; count: number; postUrls: string[] }>;
+    // Store associated post URLs and top user for each rule
+    topRules: Array<{
+        ruleId: string;
+        count: number;
+        postUrls: string[];
+        topUser?: { username: string; count: number };
+    }>;
     // Store individual post details for each user
     topUsers: Array<{
         username: string;
         count: number;
-        // Store the latest N posts flagged for this user
         flaggedPosts: Array<{ url: string; ruleId: string; timestamp: number }>;
     }>;
 };

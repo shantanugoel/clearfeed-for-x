@@ -13,8 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 let currentSettings: ExtensionSettings | null = null;
 let currentRules: Rule[] = [];
 let currentAnalytics: LocalAnalyticsData | null = null;
-let showAllRules = false; // <-- State for expanding rules list
-let showAllUsers = false; // <-- State for expanding users list
+let showAllRules = false; // True = Show All, False = Show Top 10
+let showAllUsers = false; // True = Show All, False = Show Top 10
 
 // --- DOM Elements ---
 let settingsForm: HTMLDivElement | null = null;
@@ -137,7 +137,7 @@ function renderAnalytics() {
     if (!analyticsDisplayDiv) return;
 
     if (currentAnalytics === null || currentAnalytics.totalActions === 0) {
-        analyticsDisplayDiv.innerHTML = '<p>No analytics data available. Enable local logging and interact with X/Twitter.</p>';
+        analyticsDisplayDiv.innerHTML = '<p>No analytics data available...</p>';
         return;
     }
 
@@ -151,57 +151,70 @@ function renderAnalytics() {
         return urls.map(url => `<a href="${url}" target="_blank" class="analytics-url-link" title="${url}">🔗</a>`).join(' ');
     };
 
-    // New function to render flagged posts for a user
+    const MAX_POSTS_TO_SHOW_PER_USER = 10; // Limit inline display
+
     const renderFlaggedPostsForUser = (posts: Array<{ url: string; ruleId: string; timestamp: number }>): string => {
         if (!posts || posts.length === 0) return '';
-        // Create a sub-list for the posts
-        return `<ul class="flagged-posts-sublist">${posts.map(post =>
+        const postsToShow = posts.slice(0, MAX_POSTS_TO_SHOW_PER_USER);
+        const remainingCount = posts.length - postsToShow.length;
+
+        let html = `<ul class="flagged-posts-sublist">${postsToShow.map(post =>
             `<li><a href="${post.url}" target="_blank" class="analytics-url-link" title="${post.url}">🔗</a> (Rule: ${getRuleName(post.ruleId)}) <span class="timestamp">(${new Date(post.timestamp).toLocaleString()})</span></li>`
-        ).join('')
-            }</ul>`;
+        ).join('')}`;
+
+        if (remainingCount > 0) {
+            html += `<li class="more-posts-indicator">(...and ${remainingCount} more)</li>`;
+        }
+        html += `</ul>`;
+        return html;
     };
 
+    // Determine items to show based on toggle state
     const rulesToShow = showAllRules ? currentAnalytics.topRules : currentAnalytics.topRules.slice(0, 10);
     const usersToShow = showAllUsers ? currentAnalytics.topUsers : currentAnalytics.topUsers.slice(0, 10);
 
+    // Use "Show More" text if list exceeds 10
     const rulesToggleLink = currentAnalytics.topRules.length > 10
-        ? `<a href="#" id="toggle-rules-link" class="toggle-link">${showAllRules ? 'Show Top 10' : 'Show All'}</a>`
+        ? `<a href="#" id="toggle-rules-link" class="toggle-link">${showAllRules ? 'Show Less' : 'Show More'}</a>`
         : '';
     const usersToggleLink = currentAnalytics.topUsers.length > 10
-        ? `<a href="#" id="toggle-users-link" class="toggle-link">${showAllUsers ? 'Show Top 10' : 'Show All'}</a>`
+        ? `<a href="#" id="toggle-users-link" class="toggle-link">${showAllUsers ? 'Show Less' : 'Show More'}</a>`
         : '';
 
     analyticsDisplayDiv.innerHTML = `
         <div class="analytics-summary">
-            <p><strong>Total Actions Logged:</strong> ${currentAnalytics.totalActions}</p>
-            <p><strong>Actions by Type:</strong> Replace: ${currentAnalytics.actionsByType.replace} | Hide: ${currentAnalytics.actionsByType.hide}</p>
+           <p><strong>Total Actions Logged:</strong> ${currentAnalytics.totalActions}</p>
+           <p><strong>Actions by Type:</strong> Replace: ${currentAnalytics.actionsByType.replace} | Hide: ${currentAnalytics.actionsByType.hide}</p>
         </div>
 
         <div class="analytics-list-header">
-             <h4>Rules Triggered</h4>
+             <h4>Rules Triggered (${showAllRules ? 'All' : 'Top 10'})</h4>
              ${rulesToggleLink}
         </div>
         ${rulesToShow.length > 0
-            ? `<ul class="analytics-list">${rulesToShow.map(item =>
-                `<li>${getRuleName(item.ruleId)}: ${item.count} time(s) ${renderUrlListForRule(item.postUrls)}</li>`
-            ).join('')}</ul>`
+            ? `<ul class="analytics-list">${rulesToShow.map(item => {
+                const topUserInfo = item.topUser
+                    ? ` (Top user: ${escapeHtml(item.topUser.username)} - ${item.topUser.count})`
+                    : '';
+                return `<li>${getRuleName(item.ruleId)}: ${item.count} time(s)${topUserInfo} ${renderUrlListForRule(item.postUrls)}</li>`;
+            }).join('')}</ul>`
             : '<p>No rule data yet.</p>'}
 
         <div class="analytics-list-header">
-            <h4>Users Flagged</h4>
+            <h4>Users Flagged (${showAllUsers ? 'All' : 'Top 10'})</h4>
             ${usersToggleLink}
         </div>
          ${usersToShow.length > 0
-            ? `<ul class="analytics-list user-list">${usersToShow.map(item => // Add user-list class
+            ? `<ul class="analytics-list user-list">${usersToShow.map(item =>
                 `<li>
                     <span class="username">${escapeHtml(item.username)}:</span> ${item.count} time(s)
-                    ${renderFlaggedPostsForUser(item.flaggedPosts)} 
+                    ${renderFlaggedPostsForUser(item.flaggedPosts)}
                  </li>`
             ).join('')}</ul>`
             : '<p>No user data yet.</p>'}
     `;
 
-    // Add event listeners for the new toggle links
+    // Add event listeners for the toggle links
     analyticsDisplayDiv.querySelector('#toggle-rules-link')?.addEventListener('click', handleToggleRulesList);
     analyticsDisplayDiv.querySelector('#toggle-users-link')?.addEventListener('click', handleToggleUsersList);
 }
