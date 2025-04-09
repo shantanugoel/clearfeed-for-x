@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "ClearFeed for X",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "description": "Filter and modify content on X / Twitter based on rules. Replaces/hides configured phrases or semantically similar content.",
     "icons": {
         "16": "icon-16.png",

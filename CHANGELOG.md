@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Nothing yet.
 
+## [0.4.2] - 2025-04-10
+### Addred
+- Versioning for rules to ease migration when/if there's a format change
+
 ## [0.4.1] - 2025-04-10
 ### Fixed
 - Issue where re-applying a modification via the badge ("ClearFeed it") failed for hidden posts (placeholder not recreated) and replaced posts (incorrect state stored).
