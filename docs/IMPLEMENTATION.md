@@ -8,8 +8,8 @@ This document provides lower-level design details for key components.
 // Defines a single replacement/hiding rule
 export type Rule = {
   id: string; // Unique identifier (e.g., UUID)
-  type: 'literal' | 'semantic';
-  target: string; // Literal phrase or semantic intent description
+  type: 'literal' | 'semantic' | 'simple-regex';
+  target: string; // Literal phrase, semantic intent, or simple regex pattern
   replacement: string; // Text to replace with (if action is 'replace')
   action: 'replace' | 'hide';
   enabled: boolean;
@@ -66,13 +66,15 @@ export type LocalAnalytics = {
     *   Need a way to mark processed tweets (e.g., adding a custom data attribute `data-agenda-revealer-processed="true"`) to avoid reprocessing.
 *   **Text Scanning & Modification:**
     *   For each new/unprocessed tweet element:
-        *   Extract text content (carefully, avoiding metadata like timestamps/usernames if possible, or processing the specific text container).
+        *   Extract text content, perhaps also considering the existing HTML structure within the text element.
         *   Send text to Background SW if semantic analysis is required for any active rule.
-        *   Iterate through active literal rules.
+        *   Iterate through active literal and simple-regex rules.
+        *   For 'simple-regex', convert the target string to a valid RegExp (escape chars, handle `*` and `?`).
         *   Use efficient string matching (or potentially Regex for more complex literal matches) considering case sensitivity setting.
         *   If a match is found (either literal or via semantic result from Background SW):
             *   If `action` is `hide`, add a class or style to the parent tweet container (e.g., `display: none !important;`).
-            *   If `action` is `replace`, carefully replace the matched text within the tweet's text node(s). This might involve traversing text nodes and potentially splitting/wrapping nodes to avoid breaking event listeners or other markup. Using `TreeWalker` might be helpful.
+            *   If `action` is `replace`, determine the replacement HTML (parsing `**bold**` and `*italic*` from the rule's replacement string).
+            *   **Crucially:** Instead of just setting `textContent`, the script needs to find the exact text node(s) containing the match and replace the matched portion with the generated replacement HTML (or the plain text replacement if no formatting). This likely requires using `TreeWalker` to find text nodes and careful DOM manipulation (`Range.deleteContents()`, `Range.insertNode()`) to insert HTML without breaking surrounding elements or event listeners. This is significantly more complex than the previous `textContent` approach.
             *   Mark the tweet as processed.
             *   If `submissionMode` is `manual`, inject the submit button.
 *   **Performance:**

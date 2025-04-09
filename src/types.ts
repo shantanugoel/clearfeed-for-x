@@ -1,8 +1,8 @@
 // Defines a single replacement/hiding rule
 export type Rule = {
     id: string; // Unique identifier (e.g., UUID)
-    type: 'literal' | 'semantic';
-    target: string; // Literal phrase or semantic intent description
+    type: 'literal' | 'semantic' | 'simple-regex';
+    target: string; // Literal phrase, semantic intent, or simple regex pattern
     replacement: string; // Text to replace with (if action is 'replace')
     action: 'replace' | 'hide';
     enabled: boolean;

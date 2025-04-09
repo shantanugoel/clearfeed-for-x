@@ -11,7 +11,7 @@ The extension will consist of the following key components built using Manifest 
     *   Responsible for identifying post/tweet elements in the DOM.
     *   Scans the text content of posts.
     *   Communicates with the Background Service Worker to fetch rules and request actions (replace/hide/analyze).
-    *   Performs DOM manipulation to replace text or hide elements based on instructions from the background script.
+    *   Performs DOM manipulation to replace text (potentially with HTML for formatting) or hide elements based on instructions from the background script.
     *   Injects UI elements for manual data submission if configured.
 
 2.  **Background Service Worker (`background.ts`):**
@@ -126,7 +126,7 @@ graph LR
 ## 4. Key Considerations
 
 *   **DOM Structure Changes:** X.com frequently updates its UI. The Content Script needs robust and adaptable selectors to identify posts reliably. Using `MutationObserver` might be necessary to handle dynamically loaded content.
-*   **Performance:** DOM manipulation and text scanning can be resource-intensive. Optimize algorithms and consider debouncing or throttling operations, especially on infinite scroll feeds.
+*   **Performance:** DOM manipulation (especially inserting HTML nodes) and text scanning can be resource-intensive. Optimize algorithms and consider debouncing or throttling operations, especially on infinite scroll feeds.
 *   **Model Size & Performance:** The local semantic model must be small enough to be packaged with the extension and fast enough not to significantly degrade the user experience. Model quantization and efficient runtimes are crucial.
 *   **Security & Privacy:** Clearly define the data submitted to the backend. Ensure secure transmission (HTTPS) and consider data minimization and anonymization.
 *   **Error Handling:** Implement robust error handling for DOM manipulation, API calls, and model execution. 

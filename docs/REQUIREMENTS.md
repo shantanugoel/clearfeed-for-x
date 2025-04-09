@@ -5,14 +5,19 @@
 ### 1.1. Core Content Modification
 - **FR1.1.1:** The extension MUST operate on the `x.com` domain.
 - **FR1.1.2:** The extension MUST identify posts (formerly tweets) in the user's feed on `x.com`.
-- **FR1.1.3:** Users MUST be able to define pairs of "target" words/phrases and their "replacement" words/phrases in the extension settings.
-- **FR1.1.4:** The extension MUST provide a default list of target/replacement pairs upon installation.
-- **FR1.1.5:** Users MUST be able to add new target/replacement pairs.
-- **FR1.1.6:** Users MUST be able to edit existing target/replacement pairs (both default and user-added).
-- **FR1.1.7:** Users MUST be able to delete target/replacement pairs (both default and user-added).
-- **FR1.1.8:** The extension MUST scan the text content of identified posts for occurrences of the "target" words/phrases.
-- **FR1.1.9:** Upon finding a match, the extension MUST replace the "target" word/phrase with the corresponding "replacement" word/phrase directly within the post's display.
-- **FR1.1.10:** Users MUST be able to enable/disable the replacement functionality globally via the settings.
+- **FR1.1.3:** Users MUST be able to define rules specifying target content and a corresponding action (replace/hide) in the extension settings.
+- **FR1.1.4:** Rules MUST specify a type: 'literal', 'simple-regex', or 'semantic'.
+- **FR1.1.5:** For 'literal' and 'simple-regex' types, users MUST define a "target" string.
+- **FR1.1.6:** For 'simple-regex' type, the target string MAY contain `*` (match zero or more characters) and `?` (match exactly one character).
+- **FR1.1.7:** For rules with a 'replace' action, users MUST define a "replacement" string.
+- **FR1.1.8:** The replacement string MAY use markdown-like syntax for basic formatting: `**bold**` for bold text and `*italic*` for italic text.
+- **FR1.1.9:** The extension MUST provide a default list of rules upon installation.
+- **FR1.1.10:** Users MUST be able to add new rules.
+- **FR1.1.11:** Users MUST be able to edit existing rules (both default and user-added).
+- **FR1.1.12:** Users MUST be able to delete non-default rules.
+- **FR1.1.13:** The extension MUST scan the text content of identified posts for matches based on enabled rules of type 'literal' and 'simple-regex'.
+- **FR1.1.14:** Upon finding a match for a rule with action 'replace', the extension MUST replace the matched text with the corresponding "replacement" string, rendering bold/italic formatting as HTML (`<strong>`, `<em>`).
+- **FR1.1.15:** Users MUST be able to enable/disable the replacement functionality globally via the settings.
 
 ### 1.2. Content Hiding
 - **FR1.2.1:** Users MUST have an option in the settings (potentially per-rule or global) to hide posts containing a "target" word/phrase instead of replacing it.
@@ -35,7 +40,7 @@
 
 ### 1.5. Settings/Options Page
 - **FR1.5.1:** The extension MUST provide an options page accessible through the browser's extension management area.
-- **FR1.5.2:** The options page MUST allow users to manage target/replacement/intent rules (add, edit, delete, toggle hide/replace).
+- **FR1.5.2:** The options page MUST allow users to manage rules (target string/intent, type, replacement, action) including add, edit, delete (non-default), and toggling enable status.
 - **FR1.5.3:** The options page MUST allow users to toggle semantic analysis on/off.
 - **FR1.5.4:** The options page MUST allow users to configure data submission preferences (enable/disable, automatic/manual).
 - **FR1.5.5:** Settings MUST persist across browser sessions.
@@ -43,7 +48,7 @@
 ## 2. Non-Functional Requirements
 
 - **NFR2.1:** **Performance:** The extension should minimize its impact on browser performance and page load times, especially during content scanning and modification. Semantic analysis impact should be clearly communicated.
-- **NFR2.2:** **Accuracy:** Word/phrase replacement should be accurate. Semantic analysis accuracy will depend on the chosen model but should aim to minimize false positives/negatives.
+- **NFR2.2:** **Accuracy:** Literal replacement should be exact. Simple regex matching should follow defined wildcard behavior. Formatted replacement should render correctly. Semantic analysis accuracy will depend on the chosen model.
 - **NFR2.3:** **Reliability:** The extension should function consistently on `x.com`, adapting to minor UI changes where feasible.
 - **NFR2.4:** **Security:** User data (settings) should be stored securely using Chrome's storage APIs. Communication with the backend (if data submission is enabled) must use HTTPS.
 - **NFR2.5:** **Privacy:** If data submission is enabled, the extension must clearly inform the user what data is being collected and how it will be used. Anonymization options should be considered for the backend aggregation.

@@ -46,7 +46,42 @@ This document outlines the phased implementation plan for the extension.
         *   Optimize scanning and manipulation for performance.
 *   **Outcome:** Extension can replace specified words/phrases and hide posts based on user-configured rules via the Options page.
 
-## Phase 2: Semantic Analysis Integration (Version 0.3.0)
+## Phase 2: Enhanced Matching & Replacement (Version 0.3.0)
+
+*   **Goal:** Add support for simple regular expressions in targets and basic formatting (bold/italic) in replacements.
+*   **Tasks:**
+    *   **Types (`src/types.ts`):**
+        *   Add `'simple-regex'` to the allowed values for `Rule['type']`.
+    *   **Options Page:**
+        *   Add 'Simple Regex' option to the rule type dropdown.
+        *   Update help text to explain simple regex syntax (`*` = any chars, `?` = one char) and replacement formatting (e.g., using `**bold**`, `*italic*`).
+    *   **Content Script:**
+        *   Implement logic to convert 'simple-regex' target strings into actual RegExp objects (e.g., escape special chars, convert `*` to `.*`, `?` to `.`).
+        *   Modify the text replacement logic: Instead of setting `textContent`, parse the replacement string for markdown-like bold/italic markers and generate corresponding HTML (`<strong>`, `<em>`) within the target text node. This requires careful DOM manipulation to avoid breaking existing structure/listeners.
+    *   **Background Script:**
+        *   Ensure saving/loading handles the new rule type correctly (no major changes likely needed).
+*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`) and apply bold/italic formatting to replacement text.
+
+## Phase 3: Local Storage & Analytics (Version 0.4.0)
+
+*   **Goal:** Store data about flagged posts locally and provide basic analytics on the Options page.
+*   **Tasks:**
+    *   **Background SW:**
+        *   Define a structure for storing flagged post data (e.g., timestamp, postUrl, username, matchedRuleId/identifier, actionTaken) in `chrome.storage.local`.
+        *   Implement logic to save this data whenever a replace/hide action occurs (if local storage is enabled via settings).
+        *   Manage storage limits (e.g., implement rotation or capping the number of entries).
+        *   Add message handler (`GET_LOCAL_ANALYTICS`) to retrieve and aggregate stored data (e.g., count per rule, count per user).
+    *   **Options Page:**
+        *   Add a section in `options.html` to display local analytics.
+        *   Add a setting toggle in `options.html` & logic in `options.ts` to enable/disable local data storage.
+        *   Implement logic in `options.ts` to:
+            *   Request analytics data (`GET_LOCAL_ANALYTICS`) from the Background SW on load.
+            *   Receive `LOCAL_ANALYTICS_DATA` message.
+            *   Render the aggregated data (e.g., top 10 rules, top 10 users flagged).
+            *   Provide a button/mechanism to clear locally stored data.
+*   **Outcome:** Flagged post information is stored locally, and basic statistics are viewable on the Options page.
+
+## Phase 4: Semantic Analysis Integration (Version 0.5.0)
 
 *   **Goal:** Add the optional semantic analysis feature.
 *   **Tasks:**
@@ -60,41 +95,15 @@ This document outlines the phased implementation plan for the extension.
         *   Implement the analysis function: take text and user-defined intents, run the model, and return matching intents/rules.
         *   Handle model loading errors and analysis errors.
     *   **Options Page:**
-        *   Add UI elements to enable/disable semantic analysis globally.
-        *   Modify the rule management UI to allow users to define an "intent" (text description) for a rule instead of/alongside a literal phrase.
-        *   Add warnings about potential performance impact.
+        *   Ensure the existing UI to enable/disable semantic analysis globally and define intent rules works correctly.
+        *   Ensure warnings about performance impact are present.
     *   **Content Script:**
-        *   Modify logic to check if semantic analysis is enabled for a rule.
+        *   Modify logic to check if semantic analysis is enabled globally *and* for a specific rule.
         *   If enabled, send `REQUEST_SEMANTIC_ANALYSIS` message to Background SW with post text.
         *   Handle `ANALYSIS_RESULT` message and apply replacement/hiding based on the matched intent.
 *   **Outcome:** Users can optionally enable semantic analysis to trigger replacements/hiding based on described intents rather than just exact phrases.
 
-## Phase 3: Local Storage & Analytics (Version 0.4.0)
-
-*   **Goal:** Store data about flagged posts locally and provide basic analytics on the Options page.
-*   **Tasks:**
-    *   **Background SW:**
-        *   Define a structure for storing flagged post data (e.g., timestamp, postUrl, username, matchedRuleId/identifier, actionTaken) in `chrome.storage.local`.
-        *   Implement logic to save this data whenever a replace/hide action occurs (if local storage is enabled via settings).
-        *   Manage storage limits (e.g., implement rotation or capping the number of entries).
-        *   Add message handler (`GET_LOCAL_ANALYTICS`) to retrieve and aggregate stored data (e.g., count per rule, count per user).
-    *   **Options Page:**
-        *   Add a section in `options.html` to display local analytics.
-        *   Add a setting toggle to enable/disable local data storage.
-        *   Implement logic in `options.ts` to:
-            *   Request analytics data (`GET_LOCAL_ANALYTICS`) from the Background SW on load.
-            *   Receive `LOCAL_ANALYTICS_DATA` message.
-            *   Render the aggregated data (e.g., top 10 rules, top 10 users flagged).
-            *   Provide a button/mechanism to clear locally stored data.
-    *   **Content Script:**
-        *   Modify manual submission button logic (if present) to correctly trigger `SUBMIT_DATA_MANUAL` message, ensuring data is sent externally.
-    *   **Backend (Conceptual - requires separate implementation):**
-        *   Implement logic to send POST requests to the backend API endpoint with the required payload (post URL, username, rule info, etc.).
-        *   If manual submission is enabled, inject a "Submit Data" button or similar UI near modified/hidden posts.
-    *   Robustness testing against X.com UI changes.
-*   **Outcome:** Flagged post information is stored locally, and basic statistics are viewable on the Options page.
-
-## Phase 4: Data Submission (Version 0.5.0)
+## Phase 5: Data Submission (Version 0.6.0)
 
 *   **Goal:** Implement the optional data submission feature to an external backend.
 *   **Tasks:**
@@ -103,7 +112,7 @@ This document outlines the phased implementation plan for the extension.
         *   Set up database schema.
         *   Decide on an authentication/authorization mechanism.
     *   **Background SW:**
-        *   Modify the logic that saves data locally (from Phase 3) to *also* send data to the backend *if* external submission is enabled and configured.
+        *   Modify the logic that saves data locally (from Phase 3) or processes actions to *also* send data to the backend *if* external submission is enabled and configured.
         *   Use the existing setting for submission (enabled/disabled, auto/manual).
         *   Implement `fetch` logic for the external API.
         *   Handle `SUBMIT_DATA_MANUAL` messages (if manual mode selected).
@@ -112,14 +121,15 @@ This document outlines the phased implementation plan for the extension.
         *   Add UI elements to configure external submission settings (enable/disable, auto/manual, potentially backend URL if configurable).
         *   Display status/feedback related to *external* submissions.
     *   **Content Script:**
-        *   Modify manual submission button logic (if present) to correctly trigger `SUBMIT_DATA_MANUAL` message, ensuring data is sent externally.
-*   **Outcome:** Extension can optionally submit data about flagged posts to a central backend service, leveraging the settings and potentially reusing local storage logic structure.
+        *   Implement logic to inject a "Submit Data" button near modified/hidden posts if manual submission is enabled.
+        *   Ensure button click sends `SUBMIT_DATA_MANUAL` message with necessary details.
+*   **Outcome:** Extension can optionally submit data about flagged posts to a central backend service, leveraging the settings.
 
-## Phase 5: Refinement & Polish (Version 0.6.0 / 1.0.0)
+## Phase 6: Refinement & Polish (Version 0.7.0 / 1.0.0)
 
 *   **Goal:** Improve performance, stability, UX, and prepare for potential release.
 *   **Tasks:**
-    *   Performance profiling and optimization (content script scanning, DOM manipulation, model inference, local storage access).
+    *   Performance profiling and optimization (content script scanning, DOM manipulation, model inference, local storage access, regex matching, HTML replacement).
     *   Robustness testing against X.com UI changes.
     *   UI/UX improvements on the Options Page.
     *   Add more comprehensive error handling and user feedback.

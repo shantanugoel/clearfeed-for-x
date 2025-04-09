@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Placeholders for Phase 2 (Semantic Analysis).
+- Placeholders for Phase 2 (Enhanced Matching & Replacement).
 - Placeholders for Phase 3 (Local Storage & Analytics).
-- Placeholders for Phase 4 (Data Submission).
+- Placeholders for Phase 4 (Semantic Analysis).
+- Placeholders for Phase 5 (Data Submission).
+- Placeholders for Phase 6 (Refinement).
 
 ## [0.2.0] - 2024-07-26
 
