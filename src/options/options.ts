@@ -1,10 +1,18 @@
 import './options.css';
-import { type Rule, type Settings, type StorageData, type ExtensionMessage } from '../types';
+import {
+    type Rule,
+    type ExtensionSettings,
+    type StorageData,
+    type ExtensionMessage,
+    type LocalAnalyticsData,
+    type FlaggedPostData
+} from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- Global State (in-memory copy) ---
-let currentSettings: Settings | null = null;
+let currentSettings: ExtensionSettings | null = null;
 let currentRules: Rule[] = [];
+let currentAnalytics: LocalAnalyticsData | null = null;
 
 // --- DOM Elements ---
 let settingsForm: HTMLDivElement | null = null;
@@ -34,18 +42,28 @@ let statusDisplay: HTMLElement | null = null; // Optional element to show status
 let exportBtn: HTMLButtonElement | null = null;
 let importBtn: HTMLButtonElement | null = null;
 let importFileInput: HTMLInputElement | null = null;
+let enableLocalLoggingCheckbox: HTMLInputElement | null = null;
+let analyticsDisplayDiv: HTMLDivElement | null = null;
+let clearAnalyticsBtn: HTMLButtonElement | null = null;
+let analyticsStatusSpan: HTMLSpanElement | null = null;
 
 const extensionEnabledCheckbox = document.getElementById('extensionEnabled') as HTMLInputElement | null;
 const semanticAnalysisEnabledCheckbox = document.getElementById('semanticAnalysisEnabled') as HTMLInputElement | null;
 const showModificationBadgeCheckbox = document.getElementById('showModificationBadge') as HTMLInputElement | null;
 
 // --- Utility Functions ---
-function showStatus(message: string, isError = false) {
-    // Optional: Update a status element in the DOM
-    if (statusDisplay) {
-        statusDisplay.textContent = message;
-        statusDisplay.className = isError ? 'status-error' : 'status-success';
+function showStatus(message: string, isError = false, targetStatusSpan?: HTMLSpanElement | null) {
+    const span = targetStatusSpan || statusDisplay; // Default to general status if specific one not provided
+    if (span) {
+        span.textContent = message;
+        span.className = isError ? 'status-error' : 'status-success';
+        // Clear status after a few seconds
+        setTimeout(() => {
+            if (span) span.textContent = '';
+        }, 3000);
     }
+    if (isError) console.error(message);
+    else console.log(message);
 }
 
 // --- Rendering Functions ---
@@ -53,9 +71,12 @@ function renderSettings() {
     if (!currentSettings || !settingsForm) return;
 
     (settingsForm.querySelector('#extensionEnabled') as HTMLInputElement).checked = currentSettings.extensionEnabled;
-    (settingsForm.querySelector('#semanticAnalysisEnabled') as HTMLInputElement).checked = currentSettings.semanticAnalysisEnabled;
     (settingsForm.querySelector('#showModificationBadge') as HTMLInputElement).checked = currentSettings.showModificationBadge;
-    // Add rendering for other settings (localStorageEnabled, submissionMode etc.) in later phases
+    (settingsForm.querySelector('#enableLocalLogging') as HTMLInputElement).checked = currentSettings.enableLocalLogging;
+    if (semanticAnalysisEnabledCheckbox) {
+        semanticAnalysisEnabledCheckbox.checked = currentSettings.enableSemanticAnalysis ?? false;
+    }
+    // TODO: Render submission settings when available
 }
 
 function renderRules() {
@@ -108,6 +129,36 @@ function renderRules() {
     });
 
     rulesContainer.appendChild(table);
+}
+
+function renderAnalytics() {
+    if (!analyticsDisplayDiv) return;
+
+    if (currentAnalytics === null) {
+        analyticsDisplayDiv.innerHTML = '<p>No analytics data available. Enable local logging and interact with X/Twitter.</p>';
+        return;
+    }
+
+    // Find rule names for topRules (optional but helpful)
+    const getRuleName = (ruleId: string): string => {
+        const rule = currentRules.find(r => r.id === ruleId);
+        return rule ? `"${rule.target}" (${rule.action})` : `Unknown Rule (${ruleId.substring(0, 6)}...)`;
+    };
+
+    analyticsDisplayDiv.innerHTML = `
+        <div class="analytics-summary">
+            <p><strong>Total Actions Logged:</strong> ${currentAnalytics.totalActions}</p>
+            <p><strong>Actions by Type:</strong> Replace: ${currentAnalytics.actionsByType.replace} | Hide: ${currentAnalytics.actionsByType.hide}</p>
+        </div>
+        <h4>Top 10 Rules Triggered:</h4>
+        ${currentAnalytics.topRules.length > 0
+            ? `<ul class="analytics-list">${currentAnalytics.topRules.map(item => `<li>${escapeHtml(getRuleName(item.ruleId))}: ${item.count} time(s)</li>`).join('')}</ul>`
+            : '<p>No rule data yet.</p>'}
+        <h4>Top 10 Users Flagged:</h4>
+         ${currentAnalytics.topUsers.length > 0
+            ? `<ul class="analytics-list">${currentAnalytics.topUsers.map(item => `<li>${escapeHtml(item.username)}: ${item.count} time(s)</li>`).join('')}</ul>`
+            : '<p>No user data yet.</p>'}
+    `;
 }
 
 // Basic HTML escaping
@@ -176,12 +227,15 @@ function updateRuleFormVisibility() {
 function handleSaveSettings() {
     if (!currentSettings || !settingsForm) return;
 
-    const newSettings: Settings = {
+    const newSettings: ExtensionSettings = {
         ...currentSettings,
         extensionEnabled: (settingsForm.querySelector('#extensionEnabled') as HTMLInputElement).checked,
-        semanticAnalysisEnabled: (settingsForm.querySelector('#semanticAnalysisEnabled') as HTMLInputElement).checked,
         showModificationBadge: (settingsForm.querySelector('#showModificationBadge') as HTMLInputElement).checked,
-        // Update other settings in later phases
+        enableLocalLogging: (settingsForm.querySelector('#enableLocalLogging') as HTMLInputElement).checked,
+        enableSemanticAnalysis: currentSettings.enableSemanticAnalysis ?? false,
+        enableDataSubmission: currentSettings.enableDataSubmission ?? false,
+        submissionMode: currentSettings.submissionMode,
+        backendUrl: currentSettings.backendUrl,
     };
 
     chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', payload: { settings: newSettings } }, (response) => {
@@ -445,6 +499,38 @@ function handleFileSelected(event: Event) {
     reader.readAsText(file);
 }
 
+function fetchAndRenderAnalytics() {
+    if (!analyticsDisplayDiv) return;
+    analyticsDisplayDiv.innerHTML = '<p>Loading analytics...</p>'; // Show loading state
+
+    chrome.runtime.sendMessage({ type: 'GET_LOCAL_ANALYTICS' }, (response) => {
+        if (response?.status === 'success') {
+            currentAnalytics = response.data as LocalAnalyticsData | null; // Store fetched data
+            renderAnalytics(); // Render the fetched data
+        } else {
+            showStatus(`Error loading analytics: ${response?.message || 'Unknown error'}`, true, analyticsStatusSpan);
+            analyticsDisplayDiv.innerHTML = '<p>Error loading analytics data.</p>';
+            currentAnalytics = null; // Reset on error
+        }
+    });
+}
+
+function handleClearAnalytics() {
+    if (!confirm('Are you sure you want to permanently delete all locally stored activity data?')) {
+        return;
+    }
+
+    chrome.runtime.sendMessage({ type: 'CLEAR_LOCAL_DATA' }, (response) => {
+        if (response?.status === 'success') {
+            showStatus('Local analytics data cleared.', false, analyticsStatusSpan);
+            currentAnalytics = null; // Clear local state
+            fetchAndRenderAnalytics(); // Refresh display (will show 'No data')
+        } else {
+            showStatus(`Error clearing data: ${response?.message || 'Unknown error'}`, true, analyticsStatusSpan);
+        }
+    });
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     // Get element references
@@ -459,7 +545,10 @@ document.addEventListener('DOMContentLoaded', () => {
     exportBtn = document.getElementById('export-rules-btn') as HTMLButtonElement;
     importBtn = document.getElementById('import-rules-btn') as HTMLButtonElement;
     importFileInput = document.getElementById('import-file-input') as HTMLInputElement;
-    // statusDisplay = document.getElementById('status-display'); // Uncomment if you add a status element
+    enableLocalLoggingCheckbox = document.getElementById('enableLocalLogging') as HTMLInputElement;
+    analyticsDisplayDiv = document.getElementById('analytics-display') as HTMLDivElement;
+    clearAnalyticsBtn = document.getElementById('clear-analytics-btn') as HTMLButtonElement;
+    analyticsStatusSpan = document.getElementById('analytics-status') as HTMLSpanElement;
 
     // Cache form elements
     if (ruleEditor) {
@@ -483,13 +572,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Request initial data
     chrome.runtime.sendMessage({ type: 'GET_ALL_DATA' }, (response) => {
         if (response?.status === 'success' && response.data) {
-            currentSettings = response.data.settings;
+            currentSettings = response.data.settings as ExtensionSettings;
             currentRules = response.data.rules || [];
             renderSettings();
             renderRules();
+
+            // After settings and rules are loaded, fetch analytics
+            fetchAndRenderAnalytics();
         } else {
             showStatus(`Error loading initial data: ${response?.message || 'Unknown error'}`, true);
             if (rulesContainer) rulesContainer.innerHTML = '<p>Error loading rules.</p>';
+            if (analyticsDisplayDiv) {
+                analyticsDisplayDiv.innerHTML = '<p>Error loading settings, cannot load analytics.</p>';
+            }
         }
     });
 
@@ -502,12 +597,13 @@ document.addEventListener('DOMContentLoaded', () => {
     exportBtn?.addEventListener('click', handleExportRules);
     importBtn?.addEventListener('click', handleImportRules);
     importFileInput?.addEventListener('change', handleFileSelected);
+    clearAnalyticsBtn?.addEventListener('click', handleClearAnalytics);
 
     // Listeners for rule editor form changes to update visibility
     ruleForm?.type?.addEventListener('change', updateRuleFormVisibility);
     ruleForm?.action?.addEventListener('change', updateRuleFormVisibility);
 
-    // TODO: Request initial analytics data in Phase 3
+    // TODO: Listen for LOCAL_ANALYTICS_DATA if needed (e.g., if background pushes updates)
 });
 
 // Listener for messages from the background script (e.g., maybe if storage changes elsewhere)

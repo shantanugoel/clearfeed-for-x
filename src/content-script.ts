@@ -1,7 +1,13 @@
-import { type Rule, type Settings, type StorageData } from './types';
+import {
+    type Rule,
+    type ExtensionSettings,
+    type StorageData,
+    type FlaggedPostData,
+    type LogFlaggedPostMessage
+} from './types';
 
 // --- State ---
-let currentSettings: Settings | null = null;
+let currentSettings: ExtensionSettings | null = null;
 let currentRules: Rule[] = [];
 let observer: MutationObserver | null = null;
 
@@ -344,101 +350,132 @@ function revertModification(postElement: HTMLElement) {
  * Applies the rules to a given post element.
  */
 function processPost(postElement: HTMLElement) {
-    const existingState = originalStateMap.get(postElement);
-    // Initial check: avoid processing if disabled, no rules, or already processed & modified
-    if (!currentSettings || !currentRules || !currentSettings.extensionEnabled ||
-        (postElement.hasAttribute(PROCESSED_MARKER) && existingState?.isCurrentlyModified)) {
-        return;
+    if (!currentSettings || !currentSettings.extensionEnabled || postElement.hasAttribute(PROCESSED_MARKER)) {
+        return; // Exit if disabled, no settings, or already processed
     }
 
-    const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement | null;
+    const textElement = postElement.querySelector<HTMLElement>(POST_TEXT_SELECTOR);
+    if (!textElement) {
+        // console.warn('[ClearFeed for X] Post text element not found in:', postElement);
+        postElement.setAttribute(PROCESSED_MARKER, 'no-text');
+        return; // Cannot process without text element
+    }
 
-    let hideRuleMatched: Rule | null = null;
-    const modifications: { regex: RegExp, replacementHtml: string }[] = [];
-    let ruleMatchedThisRun = false;
+    const originalState = ensureOriginalStateStored(postElement, textElement);
 
-    // --- Rule Processing Loop --- (check if any rule matches)
+    let actionTaken: 'replace' | 'hide' | null = null;
+    let matchedRule: Rule | null = null;
+    let matchedText: string | null = null;
+    let finalReplacementHtml: string | null = null;
+
     for (const rule of currentRules) {
-        if (!rule.enabled || (rule.type !== 'literal' && rule.type !== 'simple-regex')) continue;
+        if (!rule.enabled || !rule.target) continue;
+
         const regex = buildRegexForRule(rule);
         if (!regex) continue;
-        const testText = textElement ? (textElement.textContent || '') : '';
-        if (regex.test(testText)) {
-            ruleMatchedThisRun = true;
-            if (rule.action === 'hide') { hideRuleMatched = rule; break; }
-            else if (rule.action === 'replace' && textElement) {
-                const replacementHtml = formatReplacementText(rule.replacement);
-                const modificationRegex = buildRegexForRule(rule); // Rebuild for specific replacement
-                if (modificationRegex) modifications.push({ regex: modificationRegex, replacementHtml });
+
+        const textContent = textElement.innerText || ''; // Use innerText for matching against visible text
+        regex.lastIndex = 0; // Reset regex state
+        const match = regex.exec(textContent);
+
+        if (match) {
+            matchedRule = rule;
+            matchedText = match[0]; // Capture the specific text that matched
+            actionTaken = rule.action;
+
+            if (actionTaken === 'replace' && rule.replacement !== undefined) {
+                originalState.modifiedTextHTML = textElement.innerHTML; // Store state just before modification
+                finalReplacementHtml = formatReplacementText(rule.replacement);
+                replaceTextWithHtml(textElement, regex, finalReplacementHtml);
+                originalState.isCurrentlyModified = true;
+                originalState.isHiddenAction = false;
+            } else if (actionTaken === 'hide') {
+                originalState.isHiddenAction = true;
+                originalState.isCurrentlyModified = true;
+                originalState.ruleTarget = rule.target; // Store target for placeholder
+                // Store original display style of the text element if we hide it specifically
+                originalState.originalTextDisplay = textElement.style.display || '';
+
+                // Instead of hiding postElement directly, hide the textElement
+                // and maybe other key content parts if necessary.
+                // For simplicity now, let's just hide the textElement.
+                textElement.style.display = 'none';
+
+                // Add a placeholder *if* not already there or if badge is off
+                if (!postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`)) {
+                    const placeholder = createHiddenPlaceholder(rule.target);
+                    // Try to insert placeholder before the text element's container, or append to post
+                    textElement.parentNode?.insertBefore(placeholder, textElement);
+                }
             }
+
+            // Important: Break after the first matching rule is applied
+            break;
         }
     }
 
-    // --- Apply Action or Cleanup --- (only if a rule matched this run)
-    if (ruleMatchedThisRun) {
-        // Now ensure state is stored before modifying
-        const state = ensureOriginalStateStored(postElement, textElement);
+    postElement.setAttribute(PROCESSED_MARKER, actionTaken || 'no-match');
 
-        postElement.setAttribute(PROCESSED_MARKER, 'true');
-        const applyHideAction = hideRuleMatched !== null;
-        const applicableRuleTarget = hideRuleMatched?.target;
+    if (actionTaken && matchedRule) {
+        // If an action was taken, update the badge
+        addOrUpdateClearFeedBadge(postElement, originalState);
 
-        // Store state about THIS modification action
-        state.isHiddenAction = applyHideAction;
-        state.ruleTarget = applicableRuleTarget;
-        state.isCurrentlyModified = true; // Assume modification applied successfully initially
+        // --- LOGGING --- 
+        if (currentSettings.enableLocalLogging) {
+            try {
+                let postId = 'unknown';
+                let postUrl = window.location.href; // Fallback
+                let username = 'unknown';
 
-        if (applyHideAction) {
-            // --- Hide using CSS display: none on the text element ONLY ---
-            if (textElement) {
-                state.originalTextDisplay = textElement.style.display || ''; // Store original display of text elem
-                textElement.style.display = 'none';
-
-                // Check if placeholder already exists (e.g., from a previous toggle)
-                let placeholder = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`) as HTMLElement | null;
-                if (!placeholder) {
-                    placeholder = createHiddenPlaceholder(applicableRuleTarget);
-                    // Insert placeholder *after* the hidden text element
-                    textElement.parentNode?.insertBefore(placeholder, textElement.nextSibling);
-                } else {
-                    placeholder.style.display = 'block'; // Ensure visible if re-hiding
+                // Attempt to find the permalink anchor tag (often contains timestamp)
+                const permalinkAnchor = postElement.querySelector<HTMLAnchorElement>('a[href*="/status/"]');
+                if (permalinkAnchor?.href) {
+                    postUrl = permalinkAnchor.href;
+                    const urlParts = postUrl.split('/');
+                    const statusIndex = urlParts.indexOf('status');
+                    if (statusIndex > 0 && statusIndex < urlParts.length - 1) {
+                        // Assert type as string since the bounds check ensures it exists
+                        postId = urlParts[statusIndex + 1] as string;
+                        if (statusIndex > 1) {
+                            // Assert type as string
+                            username = `@${urlParts[statusIndex - 1]}` as string;
+                        }
+                    }
                 }
-                state.modifiedTextHTML = undefined; // No text replacement happened
-                state.originalTextHTML = undefined; // Avoid potential conflict if toggling between hide/replace rules
 
-            } else {
-                console.warn('[ClearFeed] Could not find text element to hide post:', postElement);
-                state.isCurrentlyModified = false; // Failed to hide
+                // Explicitly handle potentially undefined replacement phrase
+                let finalReplacementPhrase: string | undefined = undefined;
+                if (actionTaken === 'replace') {
+                    finalReplacementPhrase = matchedRule.replacement; // Assign string | undefined
+                }
+
+                const logEntry: FlaggedPostData = {
+                    timestamp: Date.now(),
+                    postId: postId,
+                    postUrl: postUrl,
+                    username: username,
+                    matchedRuleId: matchedRule.id,
+                    actionTaken: actionTaken,
+                    targetPhrase: matchedText ? matchedText : matchedRule.target,
+                    replacementPhrase: finalReplacementPhrase, // Use the explicitly handled value
+                };
+
+                chrome.runtime.sendMessage<LogFlaggedPostMessage>({ type: 'LOG_FLAGGED_POST', payload: logEntry })
+                    .catch(error => console.warn('[ClearFeed] Could not send log message:', error.message)); // Add catch just in case
+
+            } catch (error) {
+                console.error('[ClearFeed] Error preparing or sending log data:', error);
             }
-        } else if (modifications.length > 0 && textElement) {
-            // --- Apply Text Replacement --- 
-            state.originalTextDisplay = textElement.style.display || ''; // Store original display just in case
-            if (state.originalTextHTML !== undefined) {
-                // Restore original text HTML before applying potentially new replacements
-                // This ensures multiple replace rules don't stack incorrectly on the same element run
-                textElement.innerHTML = state.originalTextHTML;
-            }
-            modifications.forEach(({ regex, replacementHtml }) => {
-                replaceTextWithHtml(textElement, regex, replacementHtml);
-            });
-            state.modifiedTextHTML = textElement.innerHTML; // Store result
-            // Ensure main post element and text element are visible (if it was somehow hidden)
-            postElement.style.display = state.originalDisplay || 'block';
-            textElement.style.display = state.originalTextDisplay || 'block';
-            // Remove placeholder if it somehow exists from a previous state (e.g. rule changed from hide to replace)
-            postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`)?.remove();
-        } else {
-            // Rule matched but no action taken (e.g., replace rule matched but no text element)
-            state.isCurrentlyModified = false;
         }
+        // --- END LOGGING ---
 
-        // Add/update badge (respects setting)
-        addOrUpdateClearFeedBadge(postElement, state);
-
-    } else if (existingState) { // No rule matched now, but state exists?
-        // This means a previous rule matched, but no current rule does.
-        // Revert fully.
-        revertModification(postElement);
+    } else if (!actionTaken && originalStateMap.has(postElement)) {
+        // If no rule matched THIS TIME, but the post WAS previously modified, maybe revert?
+        // Or just ensure badge is removed if setting is off.
+        if (!currentSettings.showModificationBadge) {
+            postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
+        }
+        // Consider if placeholder should be removed if no rule matches anymore?
     }
 }
 
@@ -447,51 +484,40 @@ function processPost(postElement: HTMLElement) {
  */
 function updateAllBadgesVisibility() {
     if (!currentSettings) return;
-    const showBadges = currentSettings.showModificationBadge;
-
-    document.querySelectorAll(`[${PROCESSED_MARKER}]`).forEach(postElementHTML => {
-        const postElement = postElementHTML as HTMLElement;
-        const state = originalStateMap.get(postElement);
-        if (state) {
-            if (showBadges) {
-                addOrUpdateClearFeedBadge(postElement, state);
-            } else {
-                postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
-            }
-        } else {
-            postElement.removeAttribute(PROCESSED_MARKER);
+    const allPosts = document.querySelectorAll<HTMLElement>(POST_SELECTOR);
+    allPosts.forEach(postElement => {
+        if (originalStateMap.has(postElement)) {
+            const state = originalStateMap.get(postElement)!;
+            addOrUpdateClearFeedBadge(postElement, state); // This function now checks the setting internally
         }
     });
 }
 
 // --- Listener for Background Updates ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[ClearFeed Content] Received message:', message.type, message.payload);
     if (message.type === 'SETTINGS_UPDATED') {
         if (message.payload?.settings) {
-            const settingChanged = JSON.stringify(currentSettings) !== JSON.stringify(message.payload.settings);
-            const oldEnabledState = currentSettings?.extensionEnabled;
-            currentSettings = message.payload.settings;
+            const oldSettings = { ...currentSettings }; // Shallow copy for comparison
+            currentSettings = message.payload.settings as ExtensionSettings; // Update settings
+            console.log('[ClearFeed Content] Settings updated:', currentSettings);
 
-            if (settingChanged) {
-                updateAllBadgesVisibility();
-                // Handle global enable/disable change
-                if (currentSettings?.extensionEnabled !== oldEnabledState) {
-                    if (currentSettings?.extensionEnabled) {
-                        observeTimeline(); // Start observing
-                        // Reprocess everything on enable?
-                        document.querySelectorAll(POST_SELECTOR).forEach(post => processPost(post as HTMLElement));
-                    } else {
-                        if (observer) observer.disconnect(); // Stop observing
-                        // Revert all on disable
-                        document.querySelectorAll(`[${PROCESSED_MARKER}]`).forEach(el => revertModification(el as HTMLElement));
-                    }
-                }
+            // Check if badge visibility changed
+            if (oldSettings?.showModificationBadge !== currentSettings.showModificationBadge) {
+                updateAllBadgesVisibility(); // Function to add/remove all badges based on new setting
             }
+            // Potentially re-process posts if extension enabled status changed?
+            // For now, assume major changes require refresh or new posts.
         }
     } else if (message.type === 'RULES_UPDATED') {
-        document.querySelectorAll(`[${PROCESSED_MARKER}]`).forEach(el => revertModification(el as HTMLElement));
-        fetchConfigAndStart();
+        // TODO: Handle rule updates more gracefully if needed
+        // Potentially fetch new rules and re-process visible posts
+        // For now, require page refresh for rule updates to take effect
+        console.log('[ClearFeed Content] Rules updated, page refresh might be needed.');
+        // Optionally fetch new rules immediately:
+        // fetchConfigAndStart();
     }
+    // Note: Content scripts usually don't send responses unless specifically asked
 });
 
 // --- Initial Fetch and Start ---

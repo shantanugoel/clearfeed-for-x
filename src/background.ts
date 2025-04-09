@@ -1,13 +1,13 @@
-import { type Settings, type Rule, type StorageData, type ExtensionMessage } from './types';
+import { type ExtensionSettings, type Rule, type StorageData, type ExtensionMessage, type FlaggedPostData, type LocalAnalyticsData } from './types';
 import { v4 as uuidv4 } from 'uuid'; // Using UUID for unique rule IDs
 
 // --- Default State ---
-const defaultSettings: Settings = {
+const defaultSettings: ExtensionSettings = {
     extensionEnabled: true,
-    semanticAnalysisEnabled: false, // Start disabled
-    localStorageEnabled: true, // Enable local data capture by default
-    submissionEnabled: false, // Start disabled
-    submissionMode: 'disabled',
+    enableSemanticAnalysis: false, // Corrected field name
+    enableLocalLogging: true, // Enable local data capture by default
+    enableDataSubmission: false, // Corrected field name
+    submissionMode: undefined, // Default to undefined (disabled)
     showModificationBadge: true, // Ensure this is present and true
 };
 
@@ -47,6 +47,8 @@ const defaultRules: Rule[] = [
 // --- Storage Keys ---
 const STORAGE_KEY_SETTINGS = 'clearFeedSettings';
 const STORAGE_KEY_RULES = 'clearFeedRules';
+const STORAGE_KEY_LOCAL_LOG = 'clearFeedLocalLog';
+const MAX_LOG_ENTRIES = 1000;
 
 // --- Initialization ---
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -85,7 +87,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
             case 'SAVE_SETTINGS':
                 try {
                     if (message.payload?.settings) {
-                        const newSettings = message.payload.settings; // Store settings for broadcast
+                        const newSettings: ExtensionSettings = message.payload.settings; // Add type assertion
                         await chrome.storage.sync.set({ [STORAGE_KEY_SETTINGS]: newSettings });
 
                         // Notify relevant contexts (e.g., content scripts, potentially other option pages)
@@ -133,10 +135,104 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                 sendResponse({ type: 'PONG' });
                 break;
 
+            case 'LOG_FLAGGED_POST':
+                try {
+                    const settingsData = await chrome.storage.sync.get(STORAGE_KEY_SETTINGS);
+                    // Ensure correct type when retrieving settings
+                    const settings: ExtensionSettings = settingsData[STORAGE_KEY_SETTINGS] || defaultSettings;
+
+                    // Type guard for payload specific to LOG_FLAGGED_POST
+                    const postPayload = message.payload as FlaggedPostData | undefined;
+
+                    if (settings.enableLocalLogging && postPayload) {
+                        const logData = await chrome.storage.local.get(STORAGE_KEY_LOCAL_LOG);
+                        let currentLogs: FlaggedPostData[] = logData[STORAGE_KEY_LOCAL_LOG] || [];
+
+                        // Add the new log entry
+                        currentLogs.push(postPayload);
+
+                        // Trim logs if they exceed the limit (keep newest)
+                        if (currentLogs.length > MAX_LOG_ENTRIES) {
+                            currentLogs = currentLogs.slice(currentLogs.length - MAX_LOG_ENTRIES);
+                        }
+
+                        await chrome.storage.local.set({ [STORAGE_KEY_LOCAL_LOG]: currentLogs });
+                        // No need to send a response, this is fire-and-forget from content script
+                        console.log('[Background] Logged flagged post.'); // Optional logging
+                    }
+                } catch (error) {
+                    console.error('[Background] Error in LOG_FLAGGED_POST handler:', error);
+                    // No response needed here either
+                }
+                break;
+
+            case 'GET_LOCAL_ANALYTICS':
+                try {
+                    const logData = await chrome.storage.local.get(STORAGE_KEY_LOCAL_LOG);
+                    const logs: FlaggedPostData[] = logData[STORAGE_KEY_LOCAL_LOG] || [];
+
+                    if (logs.length === 0) {
+                        sendResponse({ status: 'success', data: null }); // Send null if no logs
+                        return;
+                    }
+
+                    // Aggregate data
+                    const analytics: LocalAnalyticsData = {
+                        totalActions: logs.length,
+                        actionsByType: { replace: 0, hide: 0 },
+                        topRules: [],
+                        topUsers: [],
+                    };
+
+                    const ruleCounts: Record<string, number> = {};
+                    const userCounts: Record<string, number> = {};
+
+                    for (const log of logs) {
+                        // Count actions by type
+                        if (log.actionTaken === 'replace') analytics.actionsByType.replace++;
+                        else if (log.actionTaken === 'hide') analytics.actionsByType.hide++;
+
+                        // Count by rule ID
+                        ruleCounts[log.matchedRuleId] = (ruleCounts[log.matchedRuleId] || 0) + 1;
+
+                        // Count by username
+                        if (log.username !== 'unknown') { // Avoid counting 'unknown' users
+                            userCounts[log.username] = (userCounts[log.username] || 0) + 1;
+                        }
+                    }
+
+                    // Get top 10 rules
+                    analytics.topRules = Object.entries(ruleCounts)
+                        .sort(([, countA], [, countB]) => countB - countA)
+                        .slice(0, 10)
+                        .map(([ruleId, count]) => ({ ruleId, count }));
+
+                    // Get top 10 users
+                    analytics.topUsers = Object.entries(userCounts)
+                        .sort(([, countA], [, countB]) => countB - countA)
+                        .slice(0, 10)
+                        .map(([username, count]) => ({ username, count }));
+
+                    sendResponse({ status: 'success', data: analytics });
+                } catch (error) {
+                    console.error('[Background] Error in GET_LOCAL_ANALYTICS handler:', error);
+                    sendResponse({ status: 'error', message: 'Failed to retrieve analytics data.' });
+                }
+                break;
+
+            case 'CLEAR_LOCAL_DATA':
+                try {
+                    await chrome.storage.local.remove(STORAGE_KEY_LOCAL_LOG);
+                    console.log('[Background] Cleared local flagged post data.');
+                    sendResponse({ status: 'success', message: 'Local data cleared.' });
+                } catch (error) {
+                    console.error('[Background] Error in CLEAR_LOCAL_DATA handler:', error);
+                    sendResponse({ status: 'error', message: 'Failed to clear local data.' });
+                }
+                break;
+
             default:
                 console.warn('[Background] Unrecognized message type:', message.type);
-                // It's often better not to send a response for unrecognized types
-                // sendResponse({ status: 'error', message: `Unrecognized message type: ${message.type}` });
                 break;
         }
     }
@@ -144,8 +240,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
     handleMessage();
 
     // Return true ONLY for message types that send an async response
-    if (message.type === 'GET_ALL_DATA' || message.type === 'SAVE_SETTINGS' || message.type === 'SAVE_RULES' || message.type === 'PING') {
+    if (
+        message.type === 'GET_ALL_DATA' ||
+        message.type === 'SAVE_SETTINGS' ||
+        message.type === 'SAVE_RULES' ||
+        message.type === 'PING' ||
+        message.type === 'GET_LOCAL_ANALYTICS' ||
+        message.type === 'CLEAR_LOCAL_DATA'
+    ) {
         return true;
     }
-    // For other types, return false or nothing (undefined)
+    // For LOG_FLAGGED_POST and others, return false/undefined
 }); 

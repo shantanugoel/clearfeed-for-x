@@ -32,6 +32,11 @@
             <label for="showModificationBadge">Show Indicator Badge on Modified Posts:</label>
             <input type="checkbox" id="showModificationBadge" name="showModificationBadge">
         </div>
+        <div class="setting-item">
+            <label for="enableLocalLogging">Enable Local Activity Logging:</label>
+            <input type="checkbox" id="enableLocalLogging" name="enableLocalLogging">
+            <small>Store data locally about which posts were modified or hidden.</small>
+        </div>
         <!-- Settings related to local storage and submission will be added in later phases -->
         <button id="save-settings-btn">Save General Settings</button>
     </section>
@@ -106,8 +111,12 @@
 
     <section id="local-analytics">
         <h2>Local Analytics</h2>
-        <button id="clear-analytics-btn">Clear Local Data</button>
+        <div class="setting-item">
+            <button id="clear-analytics-btn" style="margin-right: 10px;">Clear Local Data</button>
+            <span id="analytics-status" class="status-message"></span>
+        </div>
         <div id="analytics-display">
+            <p>Loading analytics...</p>
             <!-- Stats will be rendered here by JS -->
         </div>
     </section>

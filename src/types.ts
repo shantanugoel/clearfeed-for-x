@@ -50,4 +50,69 @@ export type LocalAnalytics = {
     flagsByRule: Record<string, number>; // ruleId -> count
     flagsByUser: Record<string, number>; // username -> count
     // Add other aggregated stats as needed
-}; 
+};
+
+/**
+ * Represents the data stored locally for a post that triggered a rule.
+ */
+export type FlaggedPostData = {
+    timestamp: number; // Unix timestamp (ms) when the action occurred
+    postId: string; // Unique ID of the post (e.g., status ID from URL)
+    postUrl: string; // Full URL of the post
+    username: string; // Author's username (e.g., @username)
+    matchedRuleId: string; // The 'id' of the Rule that was matched
+    actionTaken: 'replace' | 'hide'; // The action performed
+    targetPhrase: string; // The specific text that matched the rule's target
+    replacementPhrase?: string; // The text used for replacement, if action was 'replace'
+};
+
+/**
+ * Represents the aggregated analytics data retrieved from local storage.
+ */
+export type LocalAnalyticsData = {
+    totalActions: number;
+    actionsByType: {
+        replace: number;
+        hide: number;
+    };
+    topRules: Array<{ ruleId: string; count: number }>; // e.g., top 10
+    topUsers: Array<{ username: string; count: number }>; // e.g., top 10 flagged users
+    // Potentially add more stats like counts over time later
+};
+
+/**
+ * Represents the overall extension settings.
+ * Make sure this aligns with settings saved/loaded in background/options scripts.
+ */
+export type ExtensionSettings = {
+    extensionEnabled: boolean; // Master on/off switch for the extension
+    showModificationBadge: boolean; // Whether to show the indicator badge on modified posts
+    enableLocalLogging: boolean; // Controls whether flagged post data is stored locally
+    enableSemanticAnalysis?: boolean; // Optional semantic analysis feature
+    enableDataSubmission?: boolean; // Optional data submission feature
+    submissionMode?: 'auto' | 'manual'; // Mode for data submission
+    backendUrl?: string; // Optional backend URL for data submission
+};
+
+// Add new Message types for Phase 3
+export type LogFlaggedPostMessage = {
+    type: 'LOG_FLAGGED_POST';
+    payload: FlaggedPostData;
+};
+
+export type GetLocalAnalyticsMessage = {
+    type: 'GET_LOCAL_ANALYTICS';
+};
+
+export type LocalAnalyticsDataMessage = {
+    type: 'LOCAL_ANALYTICS_DATA';
+    payload: LocalAnalyticsData | null; // Null if no data or logging disabled
+};
+
+export type ClearLocalDataMessage = {
+    type: 'CLEAR_LOCAL_DATA';
+};
+
+// Update the union type for messages if you have one
+// export type BackgroundMessage = ... | LogFlaggedPostMessage | GetLocalAnalyticsMessage | ClearLocalDataMessage;
+// export type OptionsMessage = ... | LocalAnalyticsDataMessage; 
