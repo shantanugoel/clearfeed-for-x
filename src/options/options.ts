@@ -146,11 +146,19 @@ function renderAnalytics() {
         return rule ? `"${escapeHtml(rule.target)}" (${rule.action})` : `Unknown Rule (${ruleId.substring(0, 6)}...)`;
     };
 
-    const renderUrlList = (urls: string[]): string => {
+    const renderUrlListForRule = (urls: string[]): string => {
         if (!urls || urls.length === 0) return '';
-        // Display only a few URLs inline, link to see all if needed?
-        // For now, just list them as links.
         return urls.map(url => `<a href="${url}" target="_blank" class="analytics-url-link" title="${url}">🔗</a>`).join(' ');
+    };
+
+    // New function to render flagged posts for a user
+    const renderFlaggedPostsForUser = (posts: Array<{ url: string; ruleId: string; timestamp: number }>): string => {
+        if (!posts || posts.length === 0) return '';
+        // Create a sub-list for the posts
+        return `<ul class="flagged-posts-sublist">${posts.map(post =>
+            `<li><a href="${post.url}" target="_blank" class="analytics-url-link" title="${post.url}">🔗</a> (Rule: ${getRuleName(post.ruleId)}) <span class="timestamp">(${new Date(post.timestamp).toLocaleString()})</span></li>`
+        ).join('')
+            }</ul>`;
     };
 
     const rulesToShow = showAllRules ? currentAnalytics.topRules : currentAnalytics.topRules.slice(0, 10);
@@ -175,7 +183,7 @@ function renderAnalytics() {
         </div>
         ${rulesToShow.length > 0
             ? `<ul class="analytics-list">${rulesToShow.map(item =>
-                `<li>${getRuleName(item.ruleId)}: ${item.count} time(s) ${renderUrlList(item.postUrls)}</li>`
+                `<li>${getRuleName(item.ruleId)}: ${item.count} time(s) ${renderUrlListForRule(item.postUrls)}</li>`
             ).join('')}</ul>`
             : '<p>No rule data yet.</p>'}
 
@@ -184,8 +192,11 @@ function renderAnalytics() {
             ${usersToggleLink}
         </div>
          ${usersToShow.length > 0
-            ? `<ul class="analytics-list">${usersToShow.map(item =>
-                `<li>${escapeHtml(item.username)}: ${item.count} time(s) ${renderUrlList(item.postUrls)}</li>`
+            ? `<ul class="analytics-list user-list">${usersToShow.map(item => // Add user-list class
+                `<li>
+                    <span class="username">${escapeHtml(item.username)}:</span> ${item.count} time(s)
+                    ${renderFlaggedPostsForUser(item.flaggedPosts)} 
+                 </li>`
             ).join('')}</ul>`
             : '<p>No user data yet.</p>'}
     `;

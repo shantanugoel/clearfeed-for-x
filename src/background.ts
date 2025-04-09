@@ -191,73 +191,79 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                         topUsers: [],
                     };
 
-                    // Use Maps to store URLs along with counts
+                    // Use Maps to store detailed data
                     const ruleData: Map<string, { count: number; urls: Set<string> }> = new Map();
-                    const userData: Map<string, { count: number; urls: Set<string> }> = new Map();
+                    // Update userData Map to store an array of recent post details
+                    const userData: Map<string, {
+                        count: number;
+                        posts: Array<{ url: string; ruleId: string; timestamp: number }>
+                    }> = new Map();
+
+                    // Sort logs by timestamp descending to easily get the latest posts
+                    logs.sort((a, b) => b.timestamp - a.timestamp);
 
                     for (const log of logs) {
                         // Count actions by type
                         if (log.actionTaken === 'replace') analytics.actionsByType.replace++;
                         else if (log.actionTaken === 'hide') analytics.actionsByType.hide++;
 
-                        // --- Aggregate Rule Data ---
+                        // --- Aggregate Rule Data (remains the same, uses Set for URLs) ---
                         let currentRuleData = ruleData.get(log.matchedRuleId);
                         if (!currentRuleData) {
                             currentRuleData = { count: 0, urls: new Set() };
                             ruleData.set(log.matchedRuleId, currentRuleData);
                         }
                         currentRuleData.count++;
-                        // Add URL, keeping the set size limited (newest URLs)
                         if (log.postUrl && log.postUrl !== 'unknown') {
-                            // Explicit check to ensure log.postUrl is a string here
                             const urlToAdd = log.postUrl;
                             if (typeof urlToAdd === 'string') {
                                 if (currentRuleData.urls.size >= MAX_URLS_PER_ANALYTIC_ITEM) {
-                                    // Remove the oldest URL (first item in iteration order for Set)
                                     const oldestUrl = currentRuleData.urls.values().next().value;
-                                    // Ensure oldestUrl is not undefined before deleting
                                     if (oldestUrl !== undefined) {
                                         currentRuleData.urls.delete(oldestUrl);
                                     }
                                 }
-                                currentRuleData.urls.add(urlToAdd); // Use the guaranteed string
+                                currentRuleData.urls.add(urlToAdd);
                             }
                         }
 
-                        // --- Aggregate User Data ---
-                        if (log.username && log.username !== 'unknown') {
+                        // --- Aggregate User Data (Store recent posts) ---
+                        if (log.username && log.username !== 'unknown' && log.postUrl && log.postUrl !== 'unknown') {
                             let currentUserData = userData.get(log.username);
                             if (!currentUserData) {
-                                currentUserData = { count: 0, urls: new Set() };
+                                currentUserData = { count: 0, posts: [] }; // Initialize with empty posts array
                                 userData.set(log.username, currentUserData);
                             }
                             currentUserData.count++;
-                            // Add URL, limiting size
-                            if (log.postUrl && log.postUrl !== 'unknown') {
+
+                            // Add post detail if we haven't hit the limit
+                            // Since logs are sorted newest first, we just push until the limit
+                            if (currentUserData.posts.length < MAX_URLS_PER_ANALYTIC_ITEM) {
                                 const urlToAdd = log.postUrl;
                                 if (typeof urlToAdd === 'string') {
-                                    if (currentUserData.urls.size >= MAX_URLS_PER_ANALYTIC_ITEM) {
-                                        const oldestUrl = currentUserData.urls.values().next().value;
-                                        // Ensure oldestUrl is not undefined before deleting
-                                        if (oldestUrl !== undefined) {
-                                            currentUserData.urls.delete(oldestUrl);
-                                        }
-                                    }
-                                    currentUserData.urls.add(urlToAdd); // Use the guaranteed string
+                                    currentUserData.posts.push({
+                                        url: urlToAdd,
+                                        ruleId: log.matchedRuleId,
+                                        timestamp: log.timestamp
+                                    });
                                 }
                             }
                         }
                     }
 
-                    // Get ALL rules, sorted
+                    // Get ALL rules, sorted (no change needed here)
                     analytics.topRules = Array.from(ruleData.entries())
                         .sort(([, dataA], [, dataB]) => dataB.count - dataA.count)
                         .map(([ruleId, data]) => ({ ruleId, count: data.count, postUrls: Array.from(data.urls) }));
 
-                    // Get ALL users, sorted
+                    // Get ALL users, sorted, map to new structure
                     analytics.topUsers = Array.from(userData.entries())
                         .sort(([, dataA], [, dataB]) => dataB.count - dataA.count)
-                        .map(([username, data]) => ({ username, count: data.count, postUrls: Array.from(data.urls) }));
+                        .map(([username, data]) => ({
+                            username,
+                            count: data.count,
+                            flaggedPosts: data.posts // Already contains the latest N posts
+                        }));
 
                     sendResponse({ status: 'success', data: analytics });
                 } catch (error) {
