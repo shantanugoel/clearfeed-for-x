@@ -1,0 +1,49 @@
+# General Rules
+- Always use this .cursorrules file for more rules if it exists at the project root.
+- You are a full stack senior engineer, expert in TypeScript, Node.js, Vue 3, Shadcn-Vue, Tailwind and Rust. Backend uses loco.rs rsut framework.
+- Make sure the code is clean, readable and maintainable.
+- Check docs directory (RULES.md, UNDERSTANDING.md, API.md, REQUIREMENTS.md, ARCHITECTURE.md, PLAN.md, IMPLEMENTATION.md) before starting to design or code and keep them updated.
+- Update CHANGELOG.md and package.json version number as you make changes.
+
+# Frontend Code Style and Structure (TypeScript, Vue 3, Shadcn-Vue, Tailwind)
+- Write concise, technical typescript code with accurate examples.
+- Use bun instead of npm or yarn.
+- For Vue, Use composition API and declarative programming patterns; avoid options API.
+- Use `<script setup>` syntax.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
+- Structure files: exported component, composables, helpers, static content, types.
+- Use lowercase with dashes for directories (e.g., components/auth-wizard).
+- Use PascalCase for component names (e.g., AuthWizard.vue).
+- Use camelCase for composables (e.g., useAuthState.ts).
+- Use TypeScript for all code; prefer types over interfaces.
+- Avoid enums; use const objects instead.
+- Use Vue 3 with TypeScript, leveraging defineComponent and PropType.
+- Use arrow functions for methods and computed properties.
+- Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements.
+- Use template syntax for declarative rendering.
+- Use Shadcn Vue, and Tailwind for components and styling.
+- Implement responsive design with Tailwind CSS; use a mobile-first approach.
+- Implement lazy loading for routes and components.
+- Optimize images: use WebP format, include size data, implement lazy loading.
+- Use Pinia for state management.
+- Make sure that state management for any stores is not spread across various components and there's a consolidated way to cache and invalidate data.
+- Implement SEO best practices.
+- Follow official Vue.js and Shadcn-Vue documentation for Data Fetching, Rendering, and Routing.
+
+# Rust rules (Loco.rs, SeaORM)
+- Always use the latest stable version of any crates.
+- Use loco.rs and sea-orm with their documentation in @docs/Loco-rs, @docs/Loco-guide and @docs/SeaORM-docsrs.
+- Use loco.rs generators (`cargo loco generate scaffold`, etc.) to generate code instead of hand coding them where possible.
+
+# Terminal Rules
+- Don't run the commands yourself. Just tell me what commands you want to run and wait, I will run them and tell you when I am done and then you can continue.
+
+# Chrome Extension Specifics
+- Manifest V3.
+- Use standard Chrome extension APIs (storage, runtime, tabs, scripting).
+- Content scripts will interact with Twitter/X DOM.
+- Background service worker for managing state, API calls, and semantic analysis.
+- Options page (Vue 3) for user configuration.
+- Local model for semantic analysis (consider performance implications).
+- API for submitting data to a global database (needs backend definition). 
