@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build --mode production",
-    "version": "bunx scripts/version-bump.js"
+    "version": "bun scripts/version-bump.js"
   },
   "dependencies": {
     "@types/uuid": "^10.0.0",
