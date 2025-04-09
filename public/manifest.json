@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "ClearFeed for X",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Filter and modify content on X (formerly Twitter) based on your rules. Replaces/hides configured phrases or semantically similar content.",
     "author": "Shantanu Goel",
     "homepage_url": "https://github.com/shantanugoel/clearfeed-for-x",

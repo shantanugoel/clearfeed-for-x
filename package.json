@@ -1,5 +1,6 @@
 {
-  "name": "agenda-revealer",
+  "name": "clearfeed-for-x",
+  "version": "0.3.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
