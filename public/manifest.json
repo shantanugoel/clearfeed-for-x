@@ -3,6 +3,11 @@
     "name": "ClearFeed for X",
     "version": "0.3.1",
     "description": "Filter and modify content on X / Twitter based on rules. Replaces/hides configured phrases or semantically similar content.",
+    "icons": {
+        "16": "icon-16.png",
+        "48": "icon-48.png",
+        "128": "icon.png"
+    },
     "author": "Shantanu Goel",
     "homepage_url": "https://github.com/shantanugoel/clearfeed-for-x",
     "permissions": [
