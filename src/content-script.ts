@@ -7,10 +7,16 @@ let currentSettings: Settings | null = null;
 let currentRules: Rule[] = [];
 let observer: MutationObserver | null = null;
 
+// Store original state for revert functionality
+// WeakMap keys are post elements, values are { originalHTML?: string, originalDisplay?: string }
+const originalStateMap = new WeakMap<HTMLElement, { originalHTML?: string, originalDisplay?: string }>();
+
 // --- Constants ---
 const POST_SELECTOR = 'article[role="article"]'; // Selector for the main post/tweet container
 const POST_TEXT_SELECTOR = '[data-testid="tweetText"]'; // Selector for the text content within a post/tweet
 const PROCESSED_MARKER = 'data-clearfeed-processed'; // Attribute to mark processed posts/tweets
+const BADGE_CLASS = 'clearfeed-badge';
+const BADGE_REVERT_CLASS = 'clearfeed-revert-button';
 
 // --- Core Logic ---
 
@@ -190,65 +196,158 @@ function replaceTextWithHtml(textElement: HTMLElement, regex: RegExp, replacemen
 }
 
 /**
+ * Reverts modifications made to a post element.
+ */
+function revertModification(postElement: HTMLElement) {
+    const originalState = originalStateMap.get(postElement);
+    if (!originalState) return; // No state saved?
+
+    console.log('[ClearFeed for X] Reverting modifications for post:', postElement);
+
+    if (originalState.originalHTML !== undefined) {
+        const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement;
+        if (textElement) {
+            textElement.innerHTML = originalState.originalHTML;
+        }
+    }
+    if (originalState.originalDisplay !== undefined) {
+        postElement.style.display = originalState.originalDisplay;
+    }
+
+    // Clean up
+    postElement.removeAttribute(PROCESSED_MARKER);
+    originalStateMap.delete(postElement);
+    postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
+}
+
+/**
+ * Injects the ClearFeed badge into a post element.
+ */
+function addClearFeedBadge(postElement: HTMLElement, modified: boolean, hidden: boolean) {
+    // Avoid adding multiple badges
+    if (postElement.querySelector(`.${BADGE_CLASS}`)) return;
+
+    const badge = document.createElement('button'); // Use button for better accessibility
+    badge.className = `${BADGE_CLASS} ${BADGE_REVERT_CLASS}`;
+    badge.textContent = 'ClearFeed Applied'; // Placeholder text
+    badge.title = 'Click to revert ClearFeed modifications for this post';
+    badge.style.marginLeft = 'auto'; // Try to push to the right
+    badge.style.fontSize = '10px';
+    badge.style.padding = '2px 4px';
+    badge.style.border = '1px solid #ccc';
+    badge.style.borderRadius = '3px';
+    badge.style.cursor = 'pointer';
+    badge.style.backgroundColor = '#f0f0f0';
+
+    badge.onclick = (e) => {
+        e.stopPropagation(); // Prevent event bubbling
+        revertModification(postElement);
+    };
+
+    // --- Injection Point --- 
+    // Finding a stable place to inject is tricky in X.com's UI.
+    // Let's try appending it to the container that often holds the action buttons (reply, repost, like, etc.)
+    // This selector might need frequent updates.
+    const actionToolbarSelector = 'div[role="group"][id^="id__"]';
+    let targetArea = postElement.querySelector(actionToolbarSelector);
+
+    if (!targetArea) {
+        // Fallback: Append near the text element if toolbar not found
+        const textElement = postElement.querySelector(POST_TEXT_SELECTOR);
+        targetArea = textElement?.parentElement || null;
+        badge.style.display = 'block'; // Make it block if appending here
+        badge.style.marginTop = '5px';
+    }
+
+    if (targetArea) {
+        console.log('[ClearFeed for X] Injecting badge into:', targetArea);
+        targetArea.appendChild(badge); // Append to the end of the toolbar/area
+    } else {
+        console.warn('[ClearFeed for X] Could not find suitable injection point for badge on post:', postElement);
+    }
+}
+
+/**
  * Applies the rules to a given post/tweet element.
  */
 function processPost(postElement: HTMLElement) {
     if (!currentSettings || !currentRules || !currentSettings.extensionEnabled || postElement.hasAttribute(PROCESSED_MARKER)) {
-        return; // Don't process if disabled, no config, or already processed by ClearFeed
-    }
-
-    const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement;
-    if (!textElement) {
-        postElement.setAttribute(PROCESSED_MARKER, 'true');
         return;
     }
 
-    let hidePost = false;
-    // Store modifications to apply at the end to avoid conflicting replacements
-    const modifications: { regex: RegExp, replacementHtml: string }[] = [];
+    const textElement = postElement.querySelector(POST_TEXT_SELECTOR) as HTMLElement;
+    // Even if textElement is not found later, we might hide the post, so don't return early.
 
-    // Iterate through enabled rules (literal and simple-regex for Phase 2)
+    let hidePost = false;
+    const modifications: { regex: RegExp, replacementHtml: string }[] = [];
+    let modificationApplied = false; // Track if any action is taken
+    let originalHTML: string | undefined = undefined;
+    let originalDisplay: string | undefined = undefined;
+
+    // --- Store Original State FIRST (if needed) --- 
+    if (textElement) {
+        originalHTML = textElement.innerHTML; // Store potentially complex HTML
+    }
+    originalDisplay = postElement.style.display;
+
+    // --- Rule Processing Loop --- 
     for (const rule of currentRules) {
         if (!rule.enabled || (rule.type !== 'literal' && rule.type !== 'simple-regex')) continue;
 
         const regex = buildRegexForRule(rule);
-        if (!regex) continue; // Skip if regex is invalid
+        if (!regex) continue;
 
-        // Create a clone of the text element content for testing matches without modifying the live DOM yet
-        // NOTE: Cloning might not perfectly capture all event listeners or complex state.
-        // For simple text matching, checking textContent should be sufficient and safer.
-        const testText = textElement.textContent || '';
+        // Only test on textElement content if it exists and action is 'replace'
+        const testText = textElement ? (textElement.textContent || '') : ''; // Use textContent for test
 
-        if (regex.test(testText)) {
-            if (rule.action === 'hide') {
+        if (rule.action === 'hide') {
+            // For hide actions, we might need to check more than just the main text,
+            // potentially profile links, quoted tweets etc. This is complex.
+            // For now, stick to matching within the main text element if it exists.
+            if (textElement && regex.test(testText)) {
                 hidePost = true;
                 console.log(`[ClearFeed for X] Hiding post matching rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
+                modificationApplied = true;
                 break; // Stop processing rules if we decide to hide
-            } else if (rule.action === 'replace') {
+            }
+        } else if (rule.action === 'replace' && textElement) {
+            // Only test for replacement if textElement exists
+            if (regex.test(testText)) {
                 console.log(`[ClearFeed for X] Queuing replacement for rule: "${rule.target}" (Rule ID: ${rule.id})`, postElement);
                 const replacementHtml = formatReplacementText(rule.replacement);
-                // We need to re-create the regex for each modification to reset its state (e.g., lastIndex)
-                const modificationRegex = buildRegexForRule(rule);
+                const modificationRegex = buildRegexForRule(rule); // Re-build to reset state
                 if (modificationRegex) {
                     modifications.push({ regex: modificationRegex, replacementHtml });
+                    modificationApplied = true;
+                    // Don't break here, allow multiple replacements potentially
                 }
             }
         }
     }
 
-    // Apply modifications to the DOM
-    postElement.setAttribute(PROCESSED_MARKER, 'true');
+    // --- Apply Modifications & Badge --- 
+    if (modificationApplied) {
+        // Store original state ONLY if a modification actually happened
+        originalStateMap.set(postElement, { originalHTML, originalDisplay });
 
-    if (hidePost) {
-        postElement.style.display = 'none'; // Simple hiding
-    } else if (modifications.length > 0) {
-        // Apply replacements sequentially. Order might matter!
-        // A more robust approach might try to find all matches first and replace carefully.
-        console.log(`[ClearFeed for X] Applying ${modifications.length} replacements to post...`, postElement);
-        modifications.forEach(({ regex, replacementHtml }) => {
-            // Pass the live textElement to modify
-            replaceTextWithHtml(textElement, regex, replacementHtml);
-        });
+        postElement.setAttribute(PROCESSED_MARKER, 'true');
+
+        if (hidePost) {
+            postElement.style.display = 'none';
+            addClearFeedBadge(postElement, false, true);
+        } else if (modifications.length > 0 && textElement) {
+            console.log(`[ClearFeed for X] Applying ${modifications.length} replacements to post...`, postElement);
+            modifications.forEach(({ regex, replacementHtml }) => {
+                replaceTextWithHtml(textElement, regex, replacementHtml);
+            });
+            addClearFeedBadge(postElement, true, false);
+        }
+    } else {
+        // If no rules matched, mark as processed anyway to avoid re-checking
+        // unless it already has the marker (e.g., from a previous run)
+        if (!postElement.hasAttribute(PROCESSED_MARKER)) {
+            postElement.setAttribute(PROCESSED_MARKER, 'no-match'); // Use a different marker?
+        }
     }
 }
 

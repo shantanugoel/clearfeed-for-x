@@ -44,6 +44,8 @@ This document outlines the phased implementation plan for the extension.
         *   Implement DOM manipulation logic to perform text replacement or element hiding based on the matched rule's action.
         *   Handle potential errors during DOM manipulation.
         *   Optimize scanning and manipulation for performance.
+    *   **Background Script (`background.ts`):**
+        *   (Optional: Add message handler for validating imported rules if doing server-side validation).
 *   **Outcome:** Extension can replace specified words/phrases and hide posts based on user-configured rules via the Options page.
 
 ## Phase 2: Enhanced Matching & Replacement (Version 0.3.0)
@@ -72,9 +74,13 @@ This document outlines the phased implementation plan for the extension.
             *   Wrap the pattern for each part with word boundaries (`\b`) if `matchWholeWord` is true.
             *   Ensure `*` conversion (e.g., to `.*`) is greedy if appropriate, or that the overall regex captures the full intended match.
         *   Implement the more complex HTML replacement logic (handling `<strong>`, `<em>` via DOM manipulation).
+        *   Implement logic to store original state (text nodes or hidden status) before modification.
+        *   Inject a visual badge (e.g., "ClearFeed Applied") near modified/hidden posts.
+        *   Add event listeners to badges to trigger a revert action.
+        *   Implement revert logic: restore original text nodes or unhide the post element.
     *   **Background Script (`background.ts`):**
         *   (Optional: Add message handler for validating imported rules if doing server-side validation).
-*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`), target multiple alternatives using `|`, optionally match whole words only, apply bold/italic formatting to replacements, and import/export their rule configurations.
+*   **Outcome:** Users can create rules using simple wildcards (`*`, `?`), target multiple alternatives using `|`, optionally match whole words only, apply bold/italic formatting to replacements, import/export rules, and revert modifications via an indicator badge on processed posts.
 
 ## Phase 3: Local Storage & Analytics (Version 0.4.0)
 

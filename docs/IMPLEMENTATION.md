@@ -64,7 +64,8 @@ export type LocalAnalytics = {
 *   **Tweet Identification:**
     *   Will likely need to target elements based on `data-testid="tweetText"` or similar stable attributes within Twitter/X's DOM structure. Attributes like `aria-label` containing "Tweet" might also be useful fallback selectors.
     *   Initial identification on page load, then use `MutationObserver` watching the main timeline container (e.g., `[role="main"]`) for added nodes (specifically `article` elements or similar tweet wrappers) to handle infinite scroll and dynamic updates.
-    *   Need a way to mark processed tweets (e.g., adding a custom data attribute `data-agenda-revealer-processed="true"`) to avoid reprocessing.
+    *   Need a way to mark processed tweets (e.g., adding a custom data attribute `data-clearfeed-processed="true"`) to avoid reprocessing.
+    *   Need a mechanism to store the original state of modified elements (e.g., store original `innerHTML` or a list of original text nodes in a `Map` keyed by the post element, or use data attributes) to support revert functionality.
 *   **Text Scanning & Modification:**
     *   For each new/unprocessed tweet element:
         *   Extract text content, perhaps also considering the existing HTML structure within the text element.
@@ -83,12 +84,22 @@ export type LocalAnalytics = {
             *   If `action` is `hide`, add a class or style to the parent tweet container (e.g., `display: none !important;`).
             *   If `action` is `replace`, determine the replacement HTML (parsing `**bold**` and `*italic*` from the rule's replacement string).
             *   **Crucially:** Instead of just setting `textContent`, the script needs to find the exact text node(s) containing the match and replace the matched portion with the generated replacement HTML (or the plain text replacement if no formatting). This likely requires using `TreeWalker` to find text nodes and careful DOM manipulation (`Range.deleteContents()`, `Range.insertNode()`) to insert HTML without breaking surrounding elements or event listeners. This is significantly more complex than the previous `textContent` approach.
-            *   Mark the tweet as processed.
+            *   Before performing the replacement/hiding, store the original state (e.g., `innerHTML` of the text container, or `display` style for hiding).
+            *   Mark the tweet as processed (`data-clearfeed-processed="true"`).
+            *   Inject the indicator badge (e.g., create a `<span>` or `<button>`) into a suitable location within the post structure (needs a stable target selector).
+            *   Add event listener to the injected badge to trigger the revert function, passing necessary context (e.g., the post element).
             *   If `submissionMode` is `manual`, inject the submit button.
+*   **Revert Functionality:**
+    *   The event handler for the badge click retrieves the associated post element and its stored original state.
+    *   If text was replaced, restore the original `innerHTML` (or rebuild original text nodes) of the text container.
+    *   If the post was hidden, restore the original `display` style (e.g., set to `block` or remove the hiding style).
+    *   Remove the processed marker attribute.
+    *   Remove the indicator badge itself.
 *   **Performance:**
     *   Debounce the `MutationObserver` callback to avoid excessive processing during rapid DOM changes.
     *   Optimize string matching.
     *   Minimize direct DOM manipulations; batch changes if possible (though likely difficult with dynamic content). Consider modifying CSS classes over inline styles where feasible.
+    *   Storing original states for potentially many posts could consume memory; consider efficient storage or cleanup strategies.
 
 ## 3. Background Service Worker (`src/background.ts`)
 

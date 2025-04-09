@@ -20,7 +20,11 @@
 - **FR1.1.15:** Users MUST be able to delete non-default rules.
 - **FR1.1.16:** The extension MUST scan the text content of identified posts for matches based on enabled rules of type 'literal' and 'simple-regex', correctly interpreting the `|` operator and the "Match whole word only" option.
 - **FR1.1.17:** Upon finding a match for a rule with action 'replace', the extension MUST replace the matched text with the corresponding "replacement" string, rendering bold/italic formatting as HTML (`<strong>`, `<em>`).
-- **FR1.1.18:** Users MUST be able to enable/disable the replacement functionality globally via the settings.
+- **FR1.1.18:** When a post is modified (text replaced) or hidden by a rule, the extension MUST add a visual indicator (e.g., a small badge or icon) to or near the post.
+- **FR1.1.19:** The visual indicator MUST be clickable.
+- **FR1.1.20:** Clicking the indicator MUST revert the modification for that specific post (i.e., restore the original text or unhide the post).
+- **FR1.1.21:** Reverting a modification MUST also remove or update the visual indicator for that post.
+- **FR1.1.22:** Users MUST be able to enable/disable the replacement functionality globally via the settings.
 
 ### 1.2. Content Hiding
 - **FR1.2.1:** Users MUST have an option in the settings (potentially per-rule or global) to hide posts containing a "target" word/phrase instead of replacing it.
