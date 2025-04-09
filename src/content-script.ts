@@ -344,14 +344,16 @@ function revertModification(postElement: HTMLElement) {
     postElement.style.display = state.originalDisplay;
 
     // Clean up
-    postElement.removeAttribute(PROCESSED_MARKER);
-    originalStateMap.delete(postElement);
-    postElement.querySelector(`.${BADGE_CLASS}`)?.remove();
+    // postElement.removeAttribute(PROCESSED_MARKER); // <-- Keep the marker
+    // originalStateMap.delete(postElement); // <-- Keep the state entry
+    postElement.querySelector(`.${BADGE_CLASS}`)?.remove(); // Keep badge removal if needed, or let addOrUpdate handle it
 
     state.isCurrentlyModified = false;
-    // state.logged = false; // <-- Decide if reverting should allow re-logging
+    state.logged = true; // Explicitly ensure it stays logged after revert?
+    // Let's keep it as is for now, log only happens if !state.logged initially.
+    // Reverting doesn't reset the logged status.
 
-    // Update badge after reverting
+    // Update badge after reverting (will show 'Apply Changes' or be removed if setting is off)
     addOrUpdateClearFeedBadge(postElement, state);
 }
 
@@ -440,23 +442,47 @@ function processPost(postElement: HTMLElement) {
         if (currentSettings.enableLocalLogging && !originalState.logged) {
             try {
                 let postId = 'unknown';
-                let postUrl = window.location.href; // Fallback
+                let postUrl = 'unknown'; // Default to unknown
                 let username = 'unknown';
 
                 // Attempt to find the permalink anchor tag (often contains timestamp)
                 const permalinkAnchor = postElement.querySelector<HTMLAnchorElement>('a[href*="/status/"]');
-                if (permalinkAnchor?.href) {
-                    postUrl = permalinkAnchor.href;
-                    const urlParts = postUrl.split('/');
+                const rawUrl = permalinkAnchor?.href;
+
+                if (rawUrl) {
+                    const urlParts = rawUrl.split('/');
                     const statusIndex = urlParts.indexOf('status');
+
                     if (statusIndex > 0 && statusIndex < urlParts.length - 1) {
-                        // Assert type as string since the bounds check ensures it exists
-                        postId = urlParts[statusIndex + 1] as string;
-                        if (statusIndex > 1) {
-                            // Assert type as string
-                            username = `@${urlParts[statusIndex - 1]}` as string;
+                        // Find the first purely numeric part after "status"
+                        let foundPostId: string | null = null;
+                        for (let i = statusIndex + 1; i < urlParts.length; i++) {
+                            const part = urlParts[i];
+                            if (part && /^[0-9]+$/.test(part)) {
+                                foundPostId = part;
+                                // Reconstruct URL up to the post ID
+                                postUrl = urlParts.slice(0, i + 1).join('/');
+                                break; // Stop after finding the numeric ID
+                            }
                         }
+
+                        if (foundPostId) {
+                            postId = foundPostId;
+                            // Username is usually right before "status"
+                            if (statusIndex > 0) {
+                                username = `@${urlParts[statusIndex - 1]}` as string;
+                            }
+                        } else {
+                            // Fallback if no numeric ID found after status, use original raw URL
+                            postUrl = rawUrl;
+                        }
+                    } else {
+                        // Fallback if "status" not found correctly, use original raw URL
+                        postUrl = rawUrl;
                     }
+                } else {
+                    // Fallback if no anchor found
+                    postUrl = window.location.href;
                 }
 
                 // Explicitly handle potentially undefined replacement phrase
