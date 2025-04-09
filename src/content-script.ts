@@ -293,17 +293,29 @@ function handleToggleRevert(event: MouseEvent) {
     } else {
         // --- Re-apply Modification --- (Button clicked: Hide Tweet Again / Show Modified Text)
         if (state.isHiddenAction) {
-            // Hide text element, show placeholder
+            // Hide text element
             if (textElement) textElement.style.display = 'none';
             else console.warn('[ClearFeed] Text element not found on re-apply hide.');
-            if (placeholderElement) placeholderElement.style.display = 'block'; // Make sure placeholder is visible
-            else console.warn('[ClearFeed] Placeholder element not found on re-apply hide.');
+
+            // Ensure placeholder exists and is visible
+            let currentPlaceholder = postElement.querySelector(`.${HIDDEN_PLACEHOLDER_CLASS}`) as HTMLElement | null;
+            if (currentPlaceholder) {
+                currentPlaceholder.style.display = 'block';
+            } else if (textElement?.parentNode) {
+                // Placeholder was likely removed during revert, re-create it
+                console.log('[ClearFeed] Re-creating placeholder on re-apply hide.');
+                const newPlaceholder = createHiddenPlaceholder(state.ruleTarget);
+                textElement.parentNode.insertBefore(newPlaceholder, textElement);
+                currentPlaceholder = newPlaceholder; // Assign for potential use later if needed
+            } else {
+                console.warn('[ClearFeed] Cannot re-create placeholder - textElement or parent missing.');
+            }
         } else if (textElement && state.modifiedTextHTML !== undefined) {
-            // Re-apply text modification (still uses innerHTML)
+            // Re-apply text modification using the correctly stored modified state
             textElement.innerHTML = state.modifiedTextHTML;
         } else {
             console.warn('[ClearFeed] Cannot re-apply modification - state inconsistent', state);
-            // Attempt to revert fully if re-apply fails
+            // Attempt to revert fully if re-apply fails (Keep existing fallback)
             if (state.isHiddenAction) {
                 if (placeholderElement) placeholderElement.style.display = 'none';
                 if (textElement) textElement.style.display = state.originalTextDisplay || '';
@@ -391,9 +403,14 @@ function processPost(postElement: HTMLElement) {
             actionTaken = rule.action;
 
             if (actionTaken === 'replace' && rule.replacement !== undefined) {
-                originalState.modifiedTextHTML = textElement.innerHTML; // Store state just before modification
+                // Store original HTML if not already stored
+                if (originalState.originalTextHTML === undefined) {
+                    originalState.originalTextHTML = textElement.innerHTML;
+                }
                 finalReplacementHtml = formatReplacementText(rule.replacement);
                 replaceTextWithHtml(textElement, regex, finalReplacementHtml);
+                // Store the *result* of the modification AFTER it's done
+                originalState.modifiedTextHTML = textElement.innerHTML;
                 originalState.isCurrentlyModified = true;
                 originalState.isHiddenAction = false;
             } else if (actionTaken === 'hide') {
