@@ -143,7 +143,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
                     const postPayload = message.payload as FlaggedPostData | undefined;
 
-                    if (settings.enableLocalLogging && postPayload && postPayload.postUrl !== 'unknown') {
+                    // Define the regex for standard tweet URL validation
+                    const tweetUrlRegex = /^https?:\/\/x\.com\/([a-zA-Z0-9_]+)\/status\/([0-9]+)$/;
+
+                    // Check settings, payload, non-unknown URL, *and* URL pattern match
+                    if (settings.enableLocalLogging &&
+                        postPayload &&
+                        postPayload.postUrl &&
+                        postPayload.postUrl !== 'unknown' &&
+                        tweetUrlRegex.test(postPayload.postUrl)) {
                         const logData = await chrome.storage.local.get(STORAGE_KEY_LOCAL_LOG);
                         let currentLogs: FlaggedPostData[] = logData[STORAGE_KEY_LOCAL_LOG] || [];
 
@@ -151,25 +159,25 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
                         const existingLogIndex = currentLogs.findIndex(log => log.postUrl === postPayload.postUrl);
 
                         if (existingLogIndex === -1) { // Only add if URL not already logged
-                            // Add the new log entry
                             currentLogs.push(postPayload);
-
-                            // Trim logs if they exceed the limit (keep newest)
                             if (currentLogs.length > MAX_LOG_ENTRIES) {
                                 currentLogs = currentLogs.slice(currentLogs.length - MAX_LOG_ENTRIES);
                             }
-
                             await chrome.storage.local.set({ [STORAGE_KEY_LOCAL_LOG]: currentLogs });
-                            console.log(`[Background] Logged flagged post: ${postPayload.postUrl}`);
+                            console.log(`[Background] Logged flagged post (URL validated): ${postPayload.postUrl}`);
                         } else {
                             console.log(`[Background] Post already logged, skipping: ${postPayload.postUrl}`);
                         }
-                    } else if (settings.enableLocalLogging && postPayload && postPayload.postUrl === 'unknown') {
-                        console.warn('[Background] Skipping log for post with unknown URL.');
+                    } else if (settings.enableLocalLogging && postPayload) {
+                        // Log why it was skipped if logging is enabled but conditions failed
+                        if (!postPayload.postUrl || postPayload.postUrl === 'unknown') {
+                            console.warn('[Background] Skipping log for post with unknown or missing URL.');
+                        } else if (!tweetUrlRegex.test(postPayload.postUrl)) {
+                            console.warn(`[Background] Skipping log for post with non-standard URL: ${postPayload.postUrl}`);
+                        }
                     }
                 } catch (error) {
                     console.error('[Background] Error in LOG_FLAGGED_POST handler:', error);
-                    // No response needed here either
                 }
                 break;
 
