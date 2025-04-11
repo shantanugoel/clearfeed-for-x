@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.3] - 2025-04-11
+
+### Added
+
+### Changed
+
+### Fixed
+
 ### Added
 - Placeholders for Phase 3 (Local Storage & Analytics).
 - Placeholders for Phase 4 (Semantic Analysis).

@@ -1,40 +1,40 @@
 {
-    "manifest_version": 3,
-    "name": "ClearFeed for X",
-    "version": "0.4.2",
-    "description": "Filter and modify content on X / Twitter based on rules. Replaces/hides configured phrases or semantically similar content.",
-    "icons": {
-        "16": "icon-16.png",
-        "48": "icon-48.png",
-        "128": "icon.png"
-    },
-    "author": "Shantanu Goel",
-    "homepage_url": "https://github.com/shantanugoel/clearfeed-for-x",
-    "permissions": [
-        "storage",
-        "tabs"
-    ],
-    "host_permissions": [
+  "manifest_version": 3,
+  "name": "ClearFeed for X",
+  "version": "0.4.3",
+  "description": "Filter and modify content on X / Twitter based on rules. Replaces/hides configured phrases or semantically similar content.",
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon.png"
+  },
+  "author": "Shantanu Goel",
+  "homepage_url": "https://github.com/shantanugoel/clearfeed-for-x",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://x.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
         "*://x.com/*"
-    ],
-    "background": {
-        "service_worker": "src/background.js",
-        "type": "module"
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "*://x.com/*"
-            ],
-            "js": [
-                "src/content-script.js"
-            ],
-            "run_at": "document_idle"
-        }
-    ],
-    "options_page": "src/options/options.html",
-    "action": {
-        "default_title": "ClearFeed for X Settings",
-        "default_popup": "src/options/options.html"
+      ],
+      "js": [
+        "src/content-script.js"
+      ],
+      "run_at": "document_idle"
     }
+  ],
+  "options_page": "src/options/options.html",
+  "action": {
+    "default_title": "ClearFeed for X Settings",
+    "default_popup": "src/options/options.html"
+  }
 }
