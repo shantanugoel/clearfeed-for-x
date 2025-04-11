@@ -12,9 +12,7 @@
     "homepage_url": "https://github.com/shantanugoel/clearfeed-for-x",
     "permissions": [
         "storage",
-        "scripting",
-        "tabs",
-        "activeTab"
+        "tabs"
     ],
     "host_permissions": [
         "*://x.com/*"
